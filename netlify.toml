@@ -1,7 +1,7 @@
 [build]
   publish = "."
   command = "npm install"
-  functions = "netlify/functions"
+  functions = "Netlify/functions"
 
 [[headers]]
   for = "/sw.js"
