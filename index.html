@@ -982,6 +982,15 @@
         </div>
       </div>
 
+      <!-- PUSH NOTIFICATIONS -->
+      <div class="card">
+        <div class="card-title">🔔 Push Notifications</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Get notified when your cleaner accepts, declines, or completes a clean. On iPhone, you must tap the button below — iOS requires a manual tap to enable notifications.</div>
+        <div id="notif-status" style="font-size:12px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:var(--warm);color:var(--text-soft)">Checking status…</div>
+        <button class="btn-primary" onclick="enableNotificationsManually()" id="notif-enable-btn">🔔 Enable Notifications on This Device</button>
+        <div id="notif-result" style="font-size:12px;margin-top:8px;display:none"></div>
+      </div>
+
       <!-- CLEANING NOTIFICATION MESSAGE -->
       <div class="card">
         <div class="card-title">📱 Cleaning Notification Message</div>
@@ -1373,6 +1382,58 @@ function getPushSubs() {
 function savePushSubsLocal(subs) {
   localStorage.setItem('gh-push-subs', JSON.stringify(subs));
   scheduleAppDataSave('pushSubs', subs);
+}
+
+async function enableNotificationsManually() {
+  const btn = document.getElementById('notif-enable-btn');
+  const result = document.getElementById('notif-result');
+  if (result) result.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  if (!('Notification' in window)) {
+    if (result) { result.style.display = 'block'; result.style.color = 'var(--red)'; result.textContent = '❌ This browser does not support notifications.'; }
+    if (btn) { btn.disabled = false; btn.textContent = '🔔 Enable Notifications on This Device'; }
+    return;
+  }
+
+  const sub = await subscribeToPush('owner');
+  if (result) result.style.display = 'block';
+  if (sub) {
+    if (result) { result.style.color = 'var(--moss)'; result.textContent = '✓ Notifications enabled on this device!'; }
+    if (btn) btn.textContent = '✓ Enabled';
+    updateNotifStatus();
+  } else {
+    const perm = Notification.permission;
+    if (result) {
+      result.style.color = 'var(--red)';
+      result.textContent = perm === 'denied'
+        ? '❌ Notifications blocked. Go to Settings → Safari → your site → Notifications → Allow.'
+        : '❌ Could not enable. Make sure the app is installed to your home screen.';
+    }
+    if (btn) { btn.disabled = false; btn.textContent = '🔔 Enable Notifications on This Device'; }
+  }
+}
+
+function updateNotifStatus() {
+  const el = document.getElementById('notif-status');
+  if (!el) return;
+  if (!('Notification' in window)) {
+    el.textContent = '⚠️ Notifications not supported on this browser.';
+    el.style.background = '#FDECEA'; el.style.color = 'var(--red)';
+    return;
+  }
+  const perm = Notification.permission;
+  const sub = getOwnerSub();
+  if (perm === 'granted' && sub) {
+    el.textContent = '✅ Notifications active on this device.';
+    el.style.background = '#F0FAF4'; el.style.color = 'var(--moss)';
+  } else if (perm === 'denied') {
+    el.textContent = '❌ Notifications blocked — change in device Settings.';
+    el.style.background = '#FDECEA'; el.style.color = 'var(--red)';
+  } else {
+    el.textContent = '⚪ Notifications not yet enabled on this device.';
+    el.style.background = 'var(--warm)'; el.style.color = 'var(--text-soft)';
+  }
 }
 
 async function subscribeToPush(role, cleanerId) {
@@ -2454,6 +2515,7 @@ function openSettingsCat(cat) {
     document.getElementById('settings-sms-template').value = localStorage.getItem('gh-sms-template') || defaultTemplate;
     renderCleanersList();
     populateCleanerSelect();
+    setTimeout(updateNotifStatus, 100);
   }
   if (cat === 'google') {
     const scriptUrlEl = document.getElementById('settings-script-url');
@@ -5853,10 +5915,8 @@ render();
 syncFromSheets();
 if (_scriptConfigured) setTimeout(() => pullExpensesFromSheet(), 1200);
 if (_scriptConfigured) setTimeout(() => pullAppData(), 1800);
-// Subscribe owner to push notifications (skip in cleaner mode)
-if (!isCleanerMode()) {
-  setTimeout(() => subscribeToPush('owner'), 3000);
-}
+// Subscribe owner via manual button in Settings (iOS requires user gesture)
+
 // Auto-prompt Drive connect if client ID saved but no token yet
 setTimeout(() => {
   const clientId = localStorage.getItem('gh-gdrive-client-id');
