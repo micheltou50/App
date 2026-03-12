@@ -6213,11 +6213,21 @@ function attachModalHandleDrag() {
 
 // ── CLEANER MODE ─────────────────────────────────────────────────────────────
 function isCleanerMode() {
-  return new URLSearchParams(window.location.search).get('role') === 'cleaner';
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('role') === 'cleaner') return true;
+  // Fallback for iOS PWA which strips URL params on home screen launch
+  return !!localStorage.getItem('gh-pwa-cleaner-id');
 }
 function getCleanerParams() {
   const p = new URLSearchParams(window.location.search);
-  return { id: p.get('id'), encoded: p.get('p') };
+  const id = p.get('id') || localStorage.getItem('gh-pwa-cleaner-id');
+  const encoded = p.get('p') || localStorage.getItem('gh-pwa-cleaner-p');
+  // Save to localStorage whenever we have real URL params (first load)
+  if (p.get('role') === 'cleaner' && p.get('id')) {
+    localStorage.setItem('gh-pwa-cleaner-id', p.get('id'));
+    if (p.get('p')) localStorage.setItem('gh-pwa-cleaner-p', p.get('p'));
+  }
+  return { id, encoded };
 }
 function getActiveCleaner() {
   const { id } = getCleanerParams();
@@ -6277,6 +6287,8 @@ function verifyCleanerPin() {
 function cleanerSignOut() {
   const { id } = getCleanerParams();
   localStorage.removeItem('gh-cleaner-authed-' + id);
+  localStorage.removeItem('gh-pwa-cleaner-id');
+  localStorage.removeItem('gh-pwa-cleaner-p');
   cleanerPinEntry = ''; updatePinDots();
   document.getElementById('pin-error').style.display = 'none';
   document.body.classList.remove('cleaner-mode');
