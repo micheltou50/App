@@ -1794,6 +1794,10 @@ function render() {
 
 // Full render — used after major data changes like sheet sync
 function renderAll() {
+  if (isCleanerMode()) {
+    renderCleanerView();
+    return;
+  }
   const todayBadge = document.getElementById('todayBadge');
   if (todayBadge) todayBadge.textContent = new Date().toLocaleDateString('en-AU',{day:'numeric',month:'short'});
   renderDashboard();
@@ -5970,9 +5974,14 @@ async function pullAppData(manual = false) {
 
 // Render immediately from localStorage, then sync in background
 render();
-syncFromSheets();
-if (_scriptConfigured) setTimeout(() => pullExpensesFromSheet(), 1200);
-if (_scriptConfigured) setTimeout(() => pullAppData(), 1800);
+if (isCleanerMode()) {
+  // Cleaner mode — only pull AppData (cleans, inventory, cleaners). Skip bookings CSV + expenses.
+  pullAppData();
+} else {
+  syncFromSheets();
+  if (_scriptConfigured) setTimeout(() => pullExpensesFromSheet(), 1200);
+  if (_scriptConfigured) setTimeout(() => pullAppData(), 1800);
+}
 // Subscribe owner via manual button in Settings (iOS requires user gesture)
 
 // Auto-prompt Drive connect if client ID saved but no token yet
@@ -6491,9 +6500,8 @@ async function cleanerAccept(cleanId) {
   if (!c) return;
   c.cleanerConfirmed = true;
   c.cleanerDeclined = false;
-  const booking = bookings.find(b => b.id === c.bookingId);
-  if (booking) booking.cleanerConfirmed = true;
   save();
+  pushAppData('cleans', cleans); // push immediately so owner sees it
   renderCleanerCleans();
   showBanner('✓ Clean accepted!', 'ok');
   // Push owner
@@ -6522,6 +6530,7 @@ async function cleanerDecline(cleanId) {
   c.cleanerDeclined = true;
   c.cleanerConfirmed = false;
   save();
+  pushAppData('cleans', cleans); // push immediately
   renderCleanerCleans();
   showBanner('Clean declined', 'ok');
   // Push owner
@@ -6542,9 +6551,7 @@ async function cleanerMarkDone(cleanId) {
   const ok = await showAppModal({ title: '✅ Mark Complete', msg: 'Mark this clean as completed?', confirmText: 'Yes, done!', cancelText: 'Not yet' });
   if (!ok) return;
   c.done = true; c.cleanerConfirmed = true;
-  const booking = bookings.find(b => b.id === c.bookingId);
-  if (booking) booking.cleanerConfirmed = true;
-  save(); renderCleanerCleans();
+  save(); pushAppData('cleans', cleans); renderCleanerCleans();
   showBanner('✓ Clean marked as complete', 'ok');
   // Push owner
   const ownerSub = getOwnerSub();
