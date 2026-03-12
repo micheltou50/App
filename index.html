@@ -5826,10 +5826,10 @@ function pushAppData(key, data) {
   fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'saveAppData', key, value: JSON.stringify(data) })
+    body: JSON.stringify({ action: 'setAppData', key, value: data })
   })
   .then(r => r.json())
-  .then(j => { if (j.status !== 'ok') console.warn('AppData save failed:', key, j); })
+  .then(j => { if (!j.success) console.warn('AppData save failed:', key, j); })
   .catch(e => console.warn('AppData push error:', key, e));
 }
 
@@ -5854,10 +5854,10 @@ async function pushAllAppData() {
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'saveAppData', key, value: JSON.stringify(data) })
+        body: JSON.stringify({ action: 'setAppData', key, value: data })
       });
       const j = await r.json();
-      if (j.status !== 'ok') errors.push(key + ': ' + j.status);
+      if (!j.success) errors.push(key + ': ' + (j.error || j.status || 'failed'));
     } catch(e) {
       errors.push(key + ': network error');
     }
