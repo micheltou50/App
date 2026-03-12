@@ -6213,21 +6213,22 @@ function attachModalHandleDrag() {
 
 // ── CLEANER MODE ─────────────────────────────────────────────────────────────
 function isCleanerMode() {
+  const hash = window.location.hash; // e.g. #cleaner/123/ABC
+  if (hash.startsWith('#cleaner/')) return true;
   const p = new URLSearchParams(window.location.search);
-  if (p.get('role') === 'cleaner') return true;
-  // Fallback for iOS PWA which strips URL params on home screen launch
-  return !!localStorage.getItem('gh-pwa-cleaner-id');
+  return p.get('role') === 'cleaner';
 }
+
 function getCleanerParams() {
-  const p = new URLSearchParams(window.location.search);
-  const id = p.get('id') || localStorage.getItem('gh-pwa-cleaner-id');
-  const encoded = p.get('p') || localStorage.getItem('gh-pwa-cleaner-p');
-  // Save to localStorage whenever we have real URL params (first load)
-  if (p.get('role') === 'cleaner' && p.get('id')) {
-    localStorage.setItem('gh-pwa-cleaner-id', p.get('id'));
-    if (p.get('p')) localStorage.setItem('gh-pwa-cleaner-p', p.get('p'));
+  // Hash format: #cleaner/ID/ENCODEDPIN
+  const hash = window.location.hash;
+  if (hash.startsWith('#cleaner/')) {
+    const parts = hash.slice(1).split('/');
+    return { id: parts[1] || null, encoded: parts[2] || null };
   }
-  return { id, encoded };
+  // Fallback: query string format (old links)
+  const p = new URLSearchParams(window.location.search);
+  return { id: p.get('id'), encoded: p.get('p') };
 }
 function getActiveCleaner() {
   const { id } = getCleanerParams();
@@ -6287,8 +6288,6 @@ function verifyCleanerPin() {
 function cleanerSignOut() {
   const { id } = getCleanerParams();
   localStorage.removeItem('gh-cleaner-authed-' + id);
-  localStorage.removeItem('gh-pwa-cleaner-id');
-  localStorage.removeItem('gh-pwa-cleaner-p');
   cleanerPinEntry = ''; updatePinDots();
   document.getElementById('pin-error').style.display = 'none';
   document.body.classList.remove('cleaner-mode');
@@ -6611,8 +6610,8 @@ function renderCleanerAccessList() {
   }).join('');
 }
 function cleanerLinkForId(c) {
-  const base = window.location.origin + window.location.pathname + '?role=cleaner&id=' + c.id;
-  return c.pin ? base + '&p=' + btoa(c.pin) : base;
+  const base = window.location.origin + window.location.pathname;
+  return c.pin ? base + '#cleaner/' + c.id + '/' + btoa(c.pin) : base + '#cleaner/' + c.id;
 }
 function saveCleanerPinById(id) {
   const input = document.getElementById('pin-input-' + id);
