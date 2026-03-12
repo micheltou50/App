@@ -830,7 +830,8 @@
         <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px">Last synced: <span id="settings-last-sync">—</span></div>
         <div style="font-size:13px;color:var(--text-soft);margin-bottom:16px" id="settings-booking-count"></div>
         <button class="btn-primary" onclick="syncFromSheets(true)">↻ Pull Bookings from Sheet</button>
-        <button class="btn-secondary" onclick="pullAppData()" style="margin-top:8px">↻ Pull App Data from Sheet</button>
+        <button class="btn-secondary" onclick="pullAppData(true)" id="pull-appdata-btn" style="margin-top:8px">↻ Pull App Data from Sheet</button>
+        <div id="pull-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
         <div style="font-size:11px;color:var(--text-soft);margin-top:6px;line-height:1.5">Syncs cleaners, cleans, inventory &amp; notes from AppData tab.</div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
           <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push App Data to Sheet</div>
@@ -5863,31 +5864,67 @@ async function pushAllAppData() {
   }
 }
 
-async function pullAppData() {
+async function pullAppData(manual = false) {
   const url = getScriptURL();
-  if (!url) return;
+  const btn = document.getElementById('pull-appdata-btn');
+  const resultEl = document.getElementById('pull-appdata-result');
+
+  function showResult(msg, ok) {
+    if (!resultEl) return;
+    resultEl.style.display = 'block';
+    resultEl.style.background = ok ? '#F0FAF4' : '#FDECEA';
+    resultEl.style.color = ok ? 'var(--moss)' : 'var(--red)';
+    resultEl.textContent = msg;
+  }
+
+  if (!url) {
+    if (manual) showResult('❌ No Apps Script URL configured.', false);
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = '…pulling'; }
+  if (resultEl) resultEl.style.display = 'none';
+
   try {
     const resp = await fetch(url + '?action=getAppData');
+    if (!resp.ok) {
+      if (manual) showResult('❌ Server error: ' + resp.status + ' ' + resp.statusText, false);
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Pull App Data from Sheet'; }
+      return;
+    }
     const json = await resp.json();
-    if (!json.success || !json.data) return;
+    console.log('pullAppData response:', JSON.stringify(json).substring(0, 300));
+
+    if (!json.success || !json.data) {
+      if (manual) showResult('❌ Sheet returned: ' + JSON.stringify(json).substring(0, 100), false);
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Pull App Data from Sheet'; }
+      return;
+    }
+
     const d = json.data;
+    let restored = [];
+
     if (d.cleaners && Array.isArray(d.cleaners) && d.cleaners.length > 0) {
       localStorage.setItem('gh-cleaners', JSON.stringify(d.cleaners));
+      restored.push(d.cleaners.length + ' cleaners');
     }
     if (d.cleans && Array.isArray(d.cleans) && d.cleans.length > 0) {
       cleans.length = 0;
       d.cleans.forEach(c => cleans.push(c));
       localStorage.setItem('gh-cleans', JSON.stringify(cleans));
+      restored.push(d.cleans.length + ' cleans');
     }
     if (d.notes && Array.isArray(d.notes)) {
       notes.length = 0;
       d.notes.forEach(n => notes.push(n));
       localStorage.setItem('gh-notes', JSON.stringify(notes));
+      restored.push(d.notes.length + ' notes');
     }
     if (d.inventory && Array.isArray(d.inventory) && d.inventory.length > 0) {
       inventory.length = 0;
       d.inventory.forEach(i => inventory.push(i));
       localStorage.setItem('gh-inventory', JSON.stringify(inventory));
+      restored.push(d.inventory.length + ' inventory items');
     }
     if (d.maintenance && Array.isArray(d.maintenance)) {
       maintenance.length = 0;
@@ -5898,16 +5935,26 @@ async function pullAppData() {
       localStorage.setItem('gh-ai-ignore', JSON.stringify(d.aiIgnore));
     }
     if (d.pushSubs && d.pushSubs.cleaners) {
-      // Merge — keep our own subscription, add any new cleaner subs from sheet
       const local = getPushSubs();
       const merged = { owner: local.owner || d.pushSubs.owner, cleaners: Object.assign({}, d.pushSubs.cleaners, local.cleaners) };
       localStorage.setItem('gh-push-subs', JSON.stringify(merged));
     }
+
     renderAll();
-    showBanner('✓ App data synced from Sheet', 'ok');
+    if (manual) {
+      if (restored.length > 0) {
+        showResult('✓ Restored: ' + restored.join(', '), true);
+      } else {
+        showResult('⚠️ Connected but no data found in AppData tab. Keys present: ' + Object.keys(d).join(', '), false);
+      }
+    } else {
+      showBanner('✓ App data synced from Sheet', 'ok');
+    }
   } catch(e) {
-    // Silent — localStorage data already rendered
+    console.error('pullAppData error:', e);
+    if (manual) showResult('❌ Error: ' + e.message, false);
   }
+  if (btn) { btn.disabled = false; btn.textContent = '↻ Pull App Data from Sheet'; }
 }
 
 // Render immediately from localStorage, then sync in background
