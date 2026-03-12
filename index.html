@@ -5869,7 +5869,7 @@ async function pullAppData() {
   try {
     const resp = await fetch(url + '?action=getAppData');
     const json = await resp.json();
-    if (json.status !== 'ok' || !json.data) return;
+    if (!json.success || !json.data) return;
     const d = json.data;
     if (d.cleaners && Array.isArray(d.cleaners) && d.cleaners.length > 0) {
       localStorage.setItem('gh-cleaners', JSON.stringify(d.cleaners));
