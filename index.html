@@ -1385,7 +1385,7 @@ function getPushSubs() {
 }
 function savePushSubsLocal(subs) {
   localStorage.setItem('gh-push-subs', JSON.stringify(subs));
-  scheduleAppDataSave('pushSubs', subs);
+  pushAppData('pushSubs', subs); // immediate, not debounced — subscriptions are critical
 }
 
 async function enableNotificationsManually() {
@@ -1441,12 +1441,17 @@ function updateNotifStatus() {
 }
 
 async function subscribeToPush(role, cleanerId) {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.warn('Push not supported on this browser');
+    return null;
+  }
   try {
     const reg = await navigator.serviceWorker.ready;
+    console.log('SW ready, getting push subscription...');
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       const permission = await Notification.requestPermission();
+      console.log('Notification permission:', permission);
       if (permission !== 'granted') return null;
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -1454,6 +1459,7 @@ async function subscribeToPush(role, cleanerId) {
       });
     }
     const subJson = sub.toJSON();
+    console.log('Subscription endpoint:', subJson.endpoint.substring(0, 60) + '...');
     const subs = getPushSubs();
     if (role === 'owner') {
       subs.owner = subJson;
@@ -1462,6 +1468,7 @@ async function subscribeToPush(role, cleanerId) {
       subs.cleaners[String(cleanerId)] = subJson;
     }
     savePushSubsLocal(subs);
+    console.log('Subscription saved for role:', role, cleanerId || '');
     return subJson;
   } catch(e) {
     console.warn('Push subscribe failed:', e);
@@ -1470,16 +1477,17 @@ async function subscribeToPush(role, cleanerId) {
 }
 
 async function sendPushToDevice(subscription, title, body, url, tag) {
-  if (!subscription) return;
+  if (!subscription) { console.warn('sendPushToDevice called with no subscription'); return; }
   try {
+    console.log('Sending push "' + title + '" to endpoint:', subscription.endpoint.substring(0, 50) + '...');
     const res = await fetch(PUSH_FUNCTION_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ subscription, title, body, url, tag })
     });
     const data = await res.json();
+    console.log('Push function response:', data);
     if (data.expired) {
-      // Subscription expired — remove it
       const subs = getPushSubs();
       if (subs.owner && JSON.stringify(subs.owner) === JSON.stringify(subscription)) delete subs.owner;
       Object.keys(subs.cleaners || {}).forEach(id => {
@@ -6016,6 +6024,16 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pageshow', (e) => { if (e.persisted) syncFromSheets(); });
 
+// Auto-refresh cleaner app when it comes back into focus or on interval
+if (isCleanerMode()) {
+  // Refresh on focus (e.g. returning from background)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) pullAppData();
+  });
+  // Also refresh every 60 seconds while open
+  setInterval(() => { if (!document.hidden) pullAppData(); }, 60000);
+}
+
 // ── FEEL & GESTURES ───────────────────────────────────────────────────────────
 
 // Default all on
@@ -6545,7 +6563,7 @@ function renderCleanerView() {
 }
 
 // ── ASSIGN CLEANER TO BOOKING (from detail modal) ─────────────────────────────
-function assignCleanerToBooking(bookingId) {
+async function assignCleanerToBooking(bookingId) {
   const cleanerId = parseInt(document.getElementById('detail-assign-cleaner').value);
   const date = document.getElementById('detail-assign-date').value;
   if (!cleanerId || !date) { showBanner('⚠ Select a cleaner and date', 'warn'); return; }
@@ -6553,7 +6571,6 @@ function assignCleanerToBooking(bookingId) {
   if (!cleanerObj) { showBanner('⚠ Cleaner not found', 'warn'); return; }
   const booking = bookings.find(b => b.id === bookingId);
   if (!booking) return;
-  // Remove existing clean for this booking, replace with new
   const existingIdx = cleans.findIndex(c => c.bookingId === bookingId);
   const newClean = {
     id: existingIdx >= 0 ? cleans[existingIdx].id : Date.now(),
@@ -6564,19 +6581,40 @@ function assignCleanerToBooking(bookingId) {
   if (existingIdx >= 0) cleans[existingIdx] = newClean;
   else cleans.push(newClean);
   save();
-  // Push notification to cleaner
+  showBanner('✓ Assigned to ' + cleanerObj.name, 'ok');
+  showDetail(bookingId);
+
+  // Pull latest pushSubs from Sheet first (cleaner sub lives on cleaner's device)
+  try {
+    const url = getScriptURL();
+    if (url) {
+      const resp = await fetch(url + '?action=getAppData');
+      const json = await resp.json();
+      if (json.success && json.data && json.data.pushSubs) {
+        const local = getPushSubs();
+        const merged = {
+          owner: local.owner || json.data.pushSubs.owner,
+          cleaners: Object.assign({}, json.data.pushSubs.cleaners, local.cleaners)
+        };
+        localStorage.setItem('gh-push-subs', JSON.stringify(merged));
+        console.log('Refreshed pushSubs from Sheet. Cleaners:', Object.keys(merged.cleaners));
+      }
+    }
+  } catch(e) { console.warn('Could not refresh pushSubs:', e); }
+
+  // Now send push with fresh subs
   const cleanerSub = getCleanerSub(cleanerObj.id);
+  console.log('Cleaner sub for id', cleanerObj.id, ':', cleanerSub ? 'found' : 'NOT FOUND');
   if (cleanerSub) {
-    const cleanerUrl = cleanerLinkForId(cleanerObj);
     sendPushToDevice(cleanerSub,
       '🏡 New Clean Assigned',
       `${booking.name || 'Guest'} · ${fmt(date)}`,
-      cleanerUrl,
+      cleanerLinkForId(cleanerObj),
       'assign-' + bookingId
     );
+  } else {
+    console.warn('No push subscription found for cleaner', cleanerObj.id, '— cleaner needs to enable notifications');
   }
-  showBanner('✓ Assigned to ' + cleanerObj.name, 'ok');
-  showDetail(bookingId); // refresh detail
 }
 
 // ── CLEANER ACCESS SETTINGS ───────────────────────────────────────────────────
