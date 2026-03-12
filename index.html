@@ -338,7 +338,10 @@
         <div style="font-family:'DM Serif Display',serif;font-size:26px;color:white;line-height:1.1">Glen<span style="color:var(--sage);font-style:italic">haven</span></div>
         <div style="font-size:11px;color:var(--stone);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase" class="header-sub-name">Cleaner View</div>
       </div>
-      <button onclick="cleanerSignOut()" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer;margin-top:4px">Sign Out</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <button onclick="cleanerSignOut()" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer">Sign Out</button>
+        <button onclick="enableCleanerNotifications()" id="cleaner-notif-btn" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:6px 12px;cursor:pointer">🔔 Enable Notifications</button>
+      </div>
     </div>
   </div>
   <!-- Tab bar -->
@@ -6285,6 +6288,35 @@ function verifyCleanerPin() {
     cleanerPinEntry = ''; setTimeout(updatePinDots, 200);
   }
 }
+async function enableCleanerNotifications() {
+  const { id } = getCleanerParams();
+  const btn = document.getElementById('cleaner-notif-btn');
+  if (btn) { btn.textContent = '…'; btn.disabled = true; }
+  const sub = await subscribeToPush('cleaner', id);
+  if (sub) {
+    if (btn) { btn.textContent = '✅ Notifications On'; btn.style.color = 'rgba(255,255,255,0.9)'; }
+    showBanner('✓ Notifications enabled!', 'ok');
+  } else {
+    if (btn) { btn.textContent = '🔔 Enable Notifications'; btn.disabled = false; }
+    const perm = window.Notification && Notification.permission;
+    if (perm === 'denied') {
+      showBanner('Notifications blocked — check Settings', 'error');
+    } else {
+      showBanner('Could not enable notifications', 'error');
+    }
+  }
+}
+
+function updateCleanerNotifBtn() {
+  const btn = document.getElementById('cleaner-notif-btn');
+  if (!btn) return;
+  const { id } = getCleanerParams();
+  const sub = getCleanerSub(id);
+  if (sub && window.Notification && Notification.permission === 'granted') {
+    btn.textContent = '✅ Notifications On';
+  }
+}
+
 function cleanerSignOut() {
   const { id } = getCleanerParams();
   localStorage.removeItem('gh-cleaner-authed-' + id);
@@ -6505,11 +6537,11 @@ async function cleanerMarkDone(cleanId) {
 }
 function renderCleanerView() {
   const cleaner = getActiveCleaner();
-  // Update header with cleaner name
   const headerSub = document.querySelector('.cleaner-header .header-sub-name');
   if (headerSub && cleaner) headerSub.textContent = 'Hi, ' + cleaner.name.split(' ')[0] + ' 👋';
   renderCleanerCleans();
   renderCleanerInventory();
+  updateCleanerNotifBtn();
 }
 
 // ── ASSIGN CLEANER TO BOOKING (from detail modal) ─────────────────────────────
