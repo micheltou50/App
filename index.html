@@ -436,10 +436,9 @@
   <div id="section-cleaning" class="section-hidden">
     <div class="card">
       <div class="tab-row" style="margin-bottom:12px">
-        <button class="tab active" onclick="filterCleans('confirmed',this)">✓ Confirmed</button>
-        <button class="tab" onclick="filterCleans('notified',this)">💬 Notified</button>
-        <button class="tab" onclick="filterCleans('declined',this)">❌ Declined</button>
-        <button class="tab" onclick="filterCleans('unbooked',this)">Unbooked</button>
+        <button class="tab active" onclick="filterCleans('upcoming',this)">🗓 Upcoming</button>
+        <button class="tab" onclick="filterCleans('action',this)">⚠️ Action</button>
+        <button class="tab" onclick="filterCleans('done',this)">✅ Done</button>
       </div>
       <div id="cleaning-list" style="max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </div>
@@ -1503,6 +1502,28 @@ async function sendPushToDevice(subscription, title, body, url, tag) {
 function getOwnerSub() { return getPushSubs().owner || null; }
 function getCleanerSub(cleanerId) { return (getPushSubs().cleaners || {})[String(cleanerId)] || null; }
 
+async function getFreshOwnerSub() {
+  // Always pull latest pushSubs from Sheet — owner sub lives on owner's device
+  try {
+    const url = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+    if (url && url.includes('script.google.com')) {
+      const resp = await fetch(url + '?action=getAppData');
+      const json = await resp.json();
+      if (json.success && json.data && json.data.pushSubs) {
+        const local = getPushSubs();
+        const merged = {
+          owner: json.data.pushSubs.owner || local.owner,
+          cleaners: Object.assign({}, json.data.pushSubs.cleaners, local.cleaners)
+        };
+        localStorage.setItem('gh-push-subs', JSON.stringify(merged));
+        console.log('Refreshed pushSubs, owner sub:', merged.owner ? 'found' : 'NOT FOUND');
+        return merged.owner || null;
+      }
+    }
+  } catch(e) { console.warn('Could not refresh pushSubs for owner:', e); }
+  return getOwnerSub();
+}
+
 // Register service worker on load
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(e => console.warn('SW register failed:', e));
@@ -1523,7 +1544,7 @@ function sheetPost(scriptUrl, action, data) {
 
 // ── STATE ────────────────────────────────────────────────────────────────
 let bookingFilter = 'upcoming';
-let cleanFilter = 'confirmed';
+let cleanFilter = 'upcoming';
 function loadJSON(key, fallback) {
   fallback = fallback !== undefined ? fallback : [];
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -1997,105 +2018,135 @@ function filterCleans(f, btn) {
 function renderCleaning() {
   const list = document.getElementById('cleaning-list');
   const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
 
-  // Unbooked = future bookings with no clean record AND not cleaner confirmed
-  if (cleanFilter === 'unbooked') {
-    const unbooked = bookings.filter(b => {
-      const isFuture = new Date(b.checkout) >= now;
-      const hasClean = cleans.some(c => c.guestName === b.name || c.bookingId === b.id);
-      const isConfirmed = b.cleanerConfirmed || cleans.some(c => (c.guestName === b.name || c.bookingId === b.id) && c.cleanerConfirmed);
-      return isFuture && !hasClean && !isConfirmed;
-    });
-    if (!unbooked.length) {
-      list.innerHTML = '<div style="color:var(--text-soft);font-size:13px;">All future bookings have a cleaner assigned.</div>';
+  function cleanCard(c, b, extra) {
+    const days = Math.ceil((new Date(c.date) - now) / 86400000);
+    const urgClass = days <= 0 ? 'urgent' : days <= 2 ? 'soon' : 'ok';
+    const urgText = days < 0 ? 'Overdue' : days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days}d`;
+    const statusBadge = c.done
+      ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✅ Done</span>'
+      : c.cleanerDeclined
+      ? '<span style="font-size:11px;font-weight:600;color:var(--red);background:#FDECEA;padding:3px 9px;border-radius:20px">❌ Declined</span>'
+      : c.cleanerConfirmed
+      ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✓ Accepted</span>'
+      : '<span style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:3px 9px;border-radius:20px">⏳ Pending</span>';
+    return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:14px">${b ? b.name : (c.guestName || '—')}</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-top:2px">🧹 ${c.cleaner || '—'} · ${fmt(c.date)}</div>
+          ${b ? `<div style="font-size:12px;color:var(--text-soft)">Checkout: ${fmt(b.checkout)}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <div class="clean-urgency ${urgClass}">${urgText}</div>
+          ${statusBadge}
+        </div>
+      </div>
+      ${extra || ''}
+    </div>`;
+  }
+
+  // ── UPCOMING: all future assigned cleans ──────────────────────────────────
+  if (cleanFilter === 'upcoming') {
+    const upcoming = cleans
+      .filter(c => !c.done && !c.cleanerDeclined && c.date >= todayStr)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!upcoming.length) {
+      list.innerHTML = '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">🧹</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No upcoming cleans</div><div style="font-size:12px;color:var(--text-soft)">Assign a cleaner to a booking to get started</div></div>';
       return;
     }
-    list.innerHTML = [...unbooked].sort((a,b)=>new Date(a.checkout)-new Date(b.checkout)).map(b => {
-      const days = Math.ceil((new Date(b.checkout) - now) / 86400000);
-      const urgClass = days <= 3 ? 'urgent' : days <= 7 ? 'soon' : 'ok';
-      return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-weight:600;font-size:14px">${b.name||''}</div>
-            <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${fmt(b.checkout)} · ${b.guests||0} guests</div>
-          </div>
-          <div class="clean-urgency ${urgClass}">No cleaner</div>
-        </div>
+    list.innerHTML = upcoming.map(c => {
+      const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+      const extra = `<div style="display:flex;gap:8px">
+        <button onclick="openNotifyModal(${c.id})" style="flex:1;background:var(--forest-light);color:var(--sage);border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">💬 SMS</button>
+        <button onclick="reassignClean(${c.id})" style="flex:1;background:var(--mist);color:var(--text);border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">↺ Reassign</button>
       </div>`;
+      return cleanCard(c, b, extra);
     }).join('');
     return;
   }
 
-  // Confirmed = future bookings where cleanerConfirmed is true
-  if (cleanFilter === 'confirmed') {
-    const confirmed = bookings.filter(b => b.cleanerConfirmed && new Date(b.checkout) >= now);
-    if (!confirmed.length) { list.innerHTML='<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">🧹</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No confirmed cleans yet</div><div style="font-size:12px;color:var(--text-soft)">Cleans appear here once a cleaner confirms</div></div>'; return; }
-    list.innerHTML = [...confirmed].sort((a,b)=>new Date(a.checkin)-new Date(b.checkin)).map(b => {
-      const clean = cleans.find(c => c.guestName === b.name || c.bookingId === b.id);
-      const cleanDate = clean ? fmt(clean.date) : fmt(b.checkout);
-      const cleanerName = clean ? clean.cleaner : '—';
-      const days = Math.ceil((new Date(b.checkout)-now)/86400000);
-      const urgClass = days < 0 ? 'ok' : days <= 1 ? 'urgent' : days <= 3 ? 'soon' : 'ok';
-      const urgText = days < 0 ? 'Past' : days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days}d`;
-      return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-weight:600;font-size:14px">${b.name}</div>
-            <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Cleaner: ${cleanerName} · ${cleanDate}</div>
+  // ── ACTION: declined + unassigned bookings ────────────────────────────────
+  if (cleanFilter === 'action') {
+    const declined = cleans.filter(c => c.cleanerDeclined);
+    const unassigned = bookings.filter(b => {
+      const isFuture = new Date(b.checkout) >= now;
+      const hasClean = cleans.some(c => c.bookingId === b.id || c.guestName === b.name);
+      return isFuture && !hasClean;
+    }).sort((a, b) => new Date(a.checkout) - new Date(b.checkout));
+
+    if (!declined.length && !unassigned.length) {
+      list.innerHTML = '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">All good!</div><div style="font-size:12px;color:var(--text-soft)">No action needed</div></div>';
+      return;
+    }
+
+    let html = '';
+    if (declined.length) {
+      html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--red);margin-bottom:4px">❌ Declined — needs reassigning</div>`;
+      html += declined.sort((a,b) => a.date.localeCompare(b.date)).map(c => {
+        const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+        const extra = `<button onclick="reassignClean(${c.id})" style="width:100%;background:var(--forest);color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">↺ Reassign Cleaner</button>`;
+        return cleanCard(c, b, extra);
+      }).join('');
+    }
+    if (unassigned.length) {
+      html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--amber);margin-top:${declined.length?'16px':'0'};margin-bottom:4px">⚠️ No cleaner assigned</div>`;
+      html += unassigned.map(b => {
+        const days = Math.ceil((new Date(b.checkout) - now) / 86400000);
+        const urgClass = days <= 3 ? 'urgent' : days <= 7 ? 'soon' : 'ok';
+        return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-weight:600;font-size:14px">${b.name || ''}</div>
+              <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${fmt(b.checkout)} · ${b.guests || 0} guests</div>
+            </div>
+            <div class="clean-urgency ${urgClass}">No cleaner</div>
           </div>
-          <div class="clean-urgency ${urgClass}">${urgText}</div>
-        </div>
-      </div>`;
-    }).join('');
+        </div>`;
+      }).join('');
+    }
+    list.innerHTML = html;
     return;
   }
 
-  const filtered = cleans.filter(c => {
-    const isFuture = new Date(c.date) >= now;
-    if (cleanFilter === 'notified') return c.notified && !c.cleanerConfirmed && !c.cleanerDeclined && isFuture;
-    if (cleanFilter === 'declined') return c.cleanerDeclined === true;
-    return false;
-  });
-  const emptyMsg = {
-    notified: '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">💬</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No pending notifications</div><div style="font-size:12px;color:var(--text-soft)">Cleans waiting for cleaner confirmation appear here</div></div>',
-    declined: '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No declined cleans</div><div style="font-size:12px;color:var(--text-soft)">Cleans that a cleaner has declined appear here</div></div>',
-    past: '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No past cleans</div><div style="font-size:12px;color:var(--text-soft)">Completed cleans will show here</div></div>',
-  }[cleanFilter] || '';
-  if (!filtered.length) { list.innerHTML=`<div style="color:var(--text-soft);font-size:13px;">${emptyMsg}</div>`; return; }
-  list.innerHTML = [...filtered].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(c=>{
-    const days = Math.ceil((new Date(c.date)-now)/86400000);
-    const urgClass = days<=1?'urgent':days<=3?'soon':'ok';
-    const urgText = days<=0?'Today!':days===1?'Tomorrow':`In ${days}d`;
-    return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div>
-          <div style="font-weight:600;font-size:14px">${c.guestName||''}</div>
-          <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Cleaner: ${c.cleaner||''} · ${fmt(c.date)}</div>
-        </div>
-        <div class="clean-urgency ${urgClass}">${urgText}</div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="markCleanerConfirmed(${c.id})" style="flex:1;background:var(--moss);color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">✓ Cleaner Confirmed</button>
-        <button onclick="openNotifyModal(${c.id})" style="flex:1;background:var(--forest-light);color:var(--sage);border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">💬 Resend SMS</button>
-      </div>
-    </div>`;
-  }).join('');
+  // ── DONE: completed cleans ────────────────────────────────────────────────
+  if (cleanFilter === 'done') {
+    const done = cleans
+      .filter(c => c.done)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    if (!done.length) {
+      list.innerHTML = '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">🧹</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No completed cleans yet</div></div>';
+      return;
+    }
+    list.innerHTML = done.map(c => {
+      const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+      return cleanCard(c, b, '');
+    }).join('');
+    return;
+  }
+}
+
+function reassignClean(cleanId) {
+  const c = cleans.find(cl => cl.id === cleanId);
+  if (!c) return;
+  // Reset the clean so it can be reassigned from the booking detail
+  const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+  if (b) {
+    showDetail(b.id);
+  } else {
+    showBanner('⚠ Booking not found — delete and reassign manually', 'warn');
+  }
 }
 
 function markCleanerConfirmed(id) {
   const c = cleans.find(c => c.id === id);
   if (c) {
     c.cleanerConfirmed = true;
-    // Match booking by name (IDs can change on sync)
-    const b = bookings.find(b => b.name === c.guestName);
-    if (b) {
-      b.cleanerConfirmed = true;
-      pushToSheet('update', b);
-    }
     save();
+    pushAppData('cleans', cleans);
     showBanner('✅ Cleaner confirmed', 'ok');
-    // Switch to confirmed tab
-    cleanFilter = 'confirmed';
+    cleanFilter = 'upcoming';
     document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
     renderCleaning();
     renderBookings();
@@ -3183,12 +3234,12 @@ function addClean() {
       if (ok) {
         newClean.notified = true;
         save();
-        cleanFilter = 'notified';
-        document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===1));
+        cleanFilter = 'upcoming';
+        document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
         renderCleaning();
         openNotifyModal(newClean.id);
       } else {
-        cleanFilter = 'confirmed';
+        cleanFilter = 'upcoming';
         document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
         renderCleaning();
       }
@@ -3422,9 +3473,9 @@ function sendSMS() {
     if (c) { c.notified = true; c.cleanerConfirmed = false; save(); }
   }
   closeNotifyModal();
-  // Switch to notified tab
-  cleanFilter = 'notified';
-  document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===1));
+  // Switch to upcoming tab
+  cleanFilter = 'upcoming';
+  document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
   renderCleaning();
   populateSelects();
 }
@@ -6505,7 +6556,7 @@ async function cleanerAccept(cleanId) {
   renderCleanerCleans();
   showBanner('✓ Clean accepted!', 'ok');
   // Push owner
-  const ownerSub = getOwnerSub();
+  const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
     sendPushToDevice(ownerSub,
       '✅ Clean Confirmed',
@@ -6534,7 +6585,7 @@ async function cleanerDecline(cleanId) {
   renderCleanerCleans();
   showBanner('Clean declined', 'ok');
   // Push owner
-  const ownerSub = getOwnerSub();
+  const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
     sendPushToDevice(ownerSub,
       '❌ Clean Declined',
@@ -6554,7 +6605,7 @@ async function cleanerMarkDone(cleanId) {
   save(); pushAppData('cleans', cleans); renderCleanerCleans();
   showBanner('✓ Clean marked as complete', 'ok');
   // Push owner
-  const ownerSub = getOwnerSub();
+  const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
     sendPushToDevice(ownerSub,
       '🏡 Clean Complete!',
