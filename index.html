@@ -65,6 +65,7 @@
   .booking-right { text-align:right; flex-shrink:0; }
   .booking-amount { font-family:'DM Serif Display',serif; font-size:17px; color:var(--forest); }
   .booking-status { display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; margin-top:3px; text-transform:uppercase; }
+  .status-cancelled { background:#FEE2E2; color:#DC2626; }
   .status-confirmed { background:#E8F5E9; color:#2E7D32; }
   .status-upcoming { background:#FFF8E1; color:#F57F17; }
   .status-completed { background:var(--warm); color:var(--text-soft); }
@@ -446,6 +447,7 @@
       <button class="tab active" onclick="filterBookings('upcoming',this)">Upcoming</button>
       <button class="tab" onclick="filterBookings('completed',this)">Past</button>
       <button class="tab" onclick="filterBookings('all',this)">All</button>
+      <button class="tab" onclick="filterBookings('cancelled',this)">Cancelled</button>
     </div>
     <div id="bookings-list"></div>
   </div>
@@ -1809,7 +1811,7 @@ async function syncFromSheets(manual = false) {
       netPayout:        9,
       cleanerConfirmed: 10,
       platform:         headers.findIndex(h => h.includes('platform')),
-      confirmCode:      headers.findIndex(h => h.includes('confirmation') || h.includes('confirm')),
+      confirmCode:      headers.findIndex(h => h.includes('confirmation code') || h === 'confirmation' || (h.includes('confirm') && !h.includes('cleaner'))),
       status:           headers.findIndex(h => h.includes('status')),
     };
     // Fall back to positional defaults if headers not recognised
@@ -2182,10 +2184,11 @@ function renderBookings(filter) {
   if (filter) bookingFilter = filter;
   const list = document.getElementById('bookings-list');
   let filtered;
-  if (bookingFilter==='all') filtered = bookings;
-  else if (bookingFilter==='upcoming') filtered = bookings.filter(b=>new Date(b.checkout)>=new Date());
-  else if (bookingFilter==='completed') filtered = bookings.filter(b=>new Date(b.checkout)<new Date());
-  else filtered = bookings.filter(b=>new Date(b.checkout)>=new Date());
+  if (bookingFilter==='all')       filtered = bookings.filter(b => b.status !== 'cancelled');
+  else if (bookingFilter==='upcoming')  filtered = bookings.filter(b => b.status !== 'cancelled' && new Date(b.checkout)>=new Date());
+  else if (bookingFilter==='completed') filtered = bookings.filter(b => b.status !== 'cancelled' && new Date(b.checkout)<new Date());
+  else if (bookingFilter==='cancelled') filtered = bookings.filter(b => b.status === 'cancelled');
+  else filtered = bookings.filter(b => b.status !== 'cancelled' && new Date(b.checkout)>=new Date());
   if (!filtered.length) {
     const hasAny = bookings.length > 0;
     list.innerHTML = `<div class="card" style="text-align:center;padding:32px 16px">
@@ -2196,8 +2199,14 @@ function renderBookings(filter) {
     return;
   }
   const sorted = [...filtered].sort((a,b)=>new Date(a.checkin)-new Date(b.checkin));
-  list.innerHTML = sorted.map(b=>`
-    <div class="card" onclick="showDetail(${b.id})" style="cursor:pointer" data-booking-id="${b.id}">
+  list.innerHTML = sorted.map(b => {
+    const isCancelled = b.status === 'cancelled';
+    const isHosting = !isCancelled && new Date(b.checkin)<=new Date() && new Date(b.checkout)>=new Date();
+    const isPast = !isCancelled && new Date(b.checkout)<new Date();
+    const statusClass = isCancelled ? 'status-cancelled' : isHosting ? 'status-upcoming' : isPast ? 'status-completed' : 'status-upcoming';
+    const statusLabel = isCancelled ? '✕ Cancelled' : isHosting ? '🏡 Hosting' : isPast ? 'Past' : 'Upcoming';
+    return `
+    <div class="card" onclick="showDetail(${b.id})" style="cursor:pointer${isCancelled?';opacity:0.6':''}" data-booking-id="${b.id}">
       <div class="booking-item" style="border:none;padding:0" data-booking-id="${b.id}">
         ${platformIcon(b.platform, 42)}
         <div class="booking-info">
@@ -2206,12 +2215,13 @@ function renderBookings(filter) {
           <div class="booking-guests">${b.guests} guests · ${b.nights} night${b.nights!==1?'s':''}</div>
         </div>
         <div class="booking-right">
-          <div class="booking-amount">$${Number(b.hostPayout||0).toLocaleString()}</div>
-          <div class="booking-status ${new Date(b.checkin)<=new Date()&&new Date(b.checkout)>=new Date()?'status-upcoming':new Date(b.checkout)<new Date()?'status-completed':'status-upcoming'}">${new Date(b.checkin)<=new Date()&&new Date(b.checkout)>=new Date()?'🏡 Hosting':new Date(b.checkout)<new Date()?'Past':'Upcoming'}</div>
-          ${b.cleanerConfirmed?'<div style="font-size:10px;color:var(--moss);margin-top:2px">🧹 ✓</div>':`<div style="font-size:10px;color:var(--amber);margin-top:2px">🧹 Pending</div>`}
+          <div class="booking-amount" style="${isCancelled?'text-decoration:line-through;color:var(--text-soft)':''}">$${Number(b.hostPayout||0).toLocaleString()}</div>
+          <div class="booking-status ${statusClass}">${statusLabel}</div>
+          ${!isCancelled ? (b.cleanerConfirmed?'<div style="font-size:10px;color:var(--moss);margin-top:2px">🧹 ✓</div>':'<div style="font-size:10px;color:var(--amber);margin-top:2px">🧹 Pending</div>') : ''}
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   animateList('#bookings-list');
   setTimeout(attachLongPress, 60);
 }
