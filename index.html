@@ -5975,10 +5975,36 @@ async function pullAppData(manual = false) {
       restored.push(d.cleaners.length + ' cleaners');
     }
     if (d.cleans && Array.isArray(d.cleans) && d.cleans.length > 0) {
+      // Merge: prefer local confirmed/declined/done states over Sheet (in case Sheet is stale)
+      const localCleans = JSON.parse(localStorage.getItem('gh-cleans') || '[]');
+      const merged = d.cleans.map(sheetClean => {
+        const local = localCleans.find(lc => String(lc.id) === String(sheetClean.id));
+        if (local) {
+          // Keep the most "advanced" state
+          return Object.assign({}, sheetClean, {
+            cleanerConfirmed: local.cleanerConfirmed || sheetClean.cleanerConfirmed,
+            cleanerDeclined:  local.cleanerDeclined  || sheetClean.cleanerDeclined,
+            done:             local.done             || sheetClean.done,
+          });
+        }
+        return sheetClean;
+      });
+      // Also keep any local cleans not yet on the Sheet
+      localCleans.forEach(lc => {
+        if (!merged.find(m => String(m.id) === String(lc.id))) merged.push(lc);
+      });
       cleans.length = 0;
-      d.cleans.forEach(c => cleans.push(c));
+      merged.forEach(c => cleans.push(c));
       localStorage.setItem('gh-cleans', JSON.stringify(cleans));
-      restored.push(d.cleans.length + ' cleans');
+      // Sync booking.cleanerConfirmed from cleans
+      cleans.forEach(c => {
+        if (c.cleanerConfirmed) {
+          const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+          if (b) b.cleanerConfirmed = true;
+        }
+      });
+      localStorage.setItem('gh-bookings', JSON.stringify(bookings));
+      restored.push(merged.length + ' cleans');
     }
     if (d.notes && Array.isArray(d.notes)) {
       notes.length = 0;
@@ -6551,8 +6577,11 @@ async function cleanerAccept(cleanId) {
   if (!c) return;
   c.cleanerConfirmed = true;
   c.cleanerDeclined = false;
+  // Also update booking so owner sees confirmed status in detail
+  const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+  if (b) b.cleanerConfirmed = true;
   save();
-  pushAppData('cleans', cleans); // push immediately so owner sees it
+  pushAppData('cleans', cleans);
   renderCleanerCleans();
   showBanner('✓ Clean accepted!', 'ok');
   // Push owner
