@@ -1035,6 +1035,7 @@ function renderRevenue() {
     const d = new Date(b.checkin);
     return b.status !== 'cancelled' && d.getMonth()===revMonth && d.getFullYear()===revYear;
   });
+  const totalHost = monthBookings.reduce((s,b)=>s+Number(b.hostPayout||0),0);
   const totalCleaning = monthBookings.reduce((s,b)=>s+Number(b.cleaningFee||0),0);
   const totalMgmt = monthBookings.reduce((s,b)=>s+Number(b.mgmtFee||0),0);
   // Net = (hostPayout - cleaningFee) * mgmtFee% — but mgmtFee is already the dollar amount
