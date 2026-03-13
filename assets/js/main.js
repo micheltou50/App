@@ -430,12 +430,20 @@ let bannerTimer;
 function showBanner(msg, type) {
   const banner = document.getElementById('sync-banner');
   const text = document.getElementById('sync-text');
-  const colors = { ok: '#4A7C59', warn: '#C17F3E', info: '#2C4A3E' };
-  banner.style.background = colors[type] || colors.info;
+
+  // UX decision: only surface banners when something needs attention.
+  const problemTypes = new Set(['warn', 'error']);
+  if (!problemTypes.has(type)) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  const colors = { warn: '#B9652C', error: '#B24747' };
+  banner.style.background = colors[type] || colors.warn;
   banner.style.display = 'flex';
   text.textContent = msg;
   clearTimeout(bannerTimer);
-  if (type !== 'info') bannerTimer = setTimeout(() => { banner.style.display = 'none'; }, 3000);
+  bannerTimer = setTimeout(() => { banner.style.display = 'none'; }, 4200);
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────
