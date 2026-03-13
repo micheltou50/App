@@ -65,6 +65,7 @@
   .booking-right { text-align:right; flex-shrink:0; }
   .booking-amount { font-family:'DM Serif Display',serif; font-size:17px; color:var(--forest); }
   .booking-status { display:inline-block; font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; margin-top:3px; text-transform:uppercase; }
+  .status-cancelled { background:#FEE2E2; color:#DC2626; }
   .status-confirmed { background:#E8F5E9; color:#2E7D32; }
   .status-upcoming { background:#FFF8E1; color:#F57F17; }
   .status-completed { background:var(--warm); color:var(--text-soft); }
@@ -338,9 +339,13 @@
         <div style="font-family:'DM Serif Display',serif;font-size:26px;color:white;line-height:1.1">Glen<span style="color:var(--sage);font-style:italic">haven</span></div>
         <div style="font-size:11px;color:var(--stone);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase" class="header-sub-name">Cleaner View</div>
       </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-        <button onclick="cleanerSignOut()" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer">Sign Out</button>
-        <button onclick="enableCleanerNotifications()" id="cleaner-notif-btn" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:6px 12px;cursor:pointer">🔔 Enable Notifications</button>
+      <button onclick="cleanerSignOut()" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer">Sign Out</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+      <div style="font-size:13px;color:rgba(255,255,255,0.6)" id="cleaner-notif-status"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="cleanerRefresh()" id="cleaner-refresh-btn" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.8);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer">↻ Refresh</button>
+        <button onclick="enableCleanerNotifications()" id="cleaner-notif-btn" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.8);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer">🔔 Notifications</button>
       </div>
     </div>
   </div>
@@ -351,8 +356,22 @@
   </div>
   <!-- Content -->
   <div class="cleaner-content">
-    <div id="cleaner-cleans-view"></div>
-    <div id="cleaner-inventory-view" style="display:none"></div>
+    <div id="cleaner-cleans-view">
+      <!-- Sub-tabs for cleans — Upcoming first, New second -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--warm);margin-bottom:12px">
+        <button id="csubtab-upcoming" onclick="switchCleanerCleanTab('upcoming')" style="flex:1;background:none;border:none;padding:12px 8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:var(--forest);border-bottom:2px solid var(--forest);margin-bottom:-2px;cursor:pointer">Upcoming <span id="csubtab-upcoming-badge"></span></button>
+        <button id="csubtab-new" onclick="switchCleanerCleanTab('new')" style="flex:1;background:none;border:none;padding:12px 8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text-soft);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer">New <span id="csubtab-new-badge"></span></button>
+      </div>
+      <div id="cleaner-cleans-upcoming"></div>
+      <div id="cleaner-cleans-new" style="display:none"></div>
+    </div>
+    <div id="cleaner-inventory-view" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-family:'DM Serif Display',serif;font-size:16px;color:var(--forest)">Inventory</div>
+        <button onclick="cleanerAddInventoryItem()" style="background:var(--forest);color:white;border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">+ Add Item</button>
+      </div>
+      <div id="cleaner-inventory-list"></div>
+    </div>
   </div>
 </div>
 
@@ -428,6 +447,7 @@
       <button class="tab active" onclick="filterBookings('upcoming',this)">Upcoming</button>
       <button class="tab" onclick="filterBookings('completed',this)">Past</button>
       <button class="tab" onclick="filterBookings('all',this)">All</button>
+      <button class="tab" onclick="filterBookings('cancelled',this)">Cancelled</button>
     </div>
     <div id="bookings-list"></div>
   </div>
@@ -436,10 +456,9 @@
   <div id="section-cleaning" class="section-hidden">
     <div class="card">
       <div class="tab-row" style="margin-bottom:12px">
-        <button class="tab active" onclick="filterCleans('confirmed',this)">✓ Confirmed</button>
-        <button class="tab" onclick="filterCleans('notified',this)">💬 Notified</button>
-        <button class="tab" onclick="filterCleans('declined',this)">❌ Declined</button>
-        <button class="tab" onclick="filterCleans('unbooked',this)">Unbooked</button>
+        <button class="tab active" onclick="filterCleans('upcoming',this)">🗓 Upcoming</button>
+        <button class="tab" onclick="filterCleans('action',this)">⚠️ Action</button>
+        <button class="tab" onclick="filterCleans('done',this)">✅ Done</button>
       </div>
       <div id="cleaning-list" style="max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch;"></div>
     </div>
@@ -707,21 +726,30 @@
   <!-- SETTINGS -->
   <div id="section-settings" class="section-hidden">
 
-    <!-- CATEGORY LIST (main settings view) -->
+    <!-- ═══════════════════════════════════════════════════════
+         MAIN SETTINGS MENU
+    ═══════════════════════════════════════════════════════ -->
     <div id="settings-menu">
       <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:16px 4px 8px">Property</div>
       <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
         <div class="settings-cat-item" onclick="openSettingsCat('property')">
           <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏡</div>
-            <div style="font-weight:500;font-size:14px">Property & People</div>
+            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏠</div>
+            <div><div style="font-weight:500;font-size:14px">Property</div><div style="font-size:12px;color:var(--text-soft)">Info & SMS template</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
-        <div class="settings-cat-item" onclick="openSettingsCat('cleaner')" style="border-bottom:none">
+        <div class="settings-cat-item" onclick="openSettingsCat('cleaner')">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🧹</div>
-            <div style="font-weight:500;font-size:14px">Cleaner Access</div>
+            <div><div style="font-weight:500;font-size:14px">Team Access</div><div style="font-size:12px;color:var(--text-soft)">Cleaner links & permissions</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('notifications')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔔</div>
+            <div><div style="font-weight:500;font-size:14px">Notifications</div><div style="font-size:12px;color:var(--text-soft)" id="notif-status-row-menu">Tap to set up</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
@@ -729,10 +757,10 @@
 
       <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Finance</div>
       <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsCat('expenses')" style="border-bottom:none">
+        <div class="settings-cat-item" onclick="openSettingsCat('finance')" style="border-bottom:none">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#FF3B30;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">💰</div>
-            <div style="font-weight:500;font-size:14px">Expenses & Invoices</div>
+            <div><div style="font-weight:500;font-size:14px">Finance</div><div style="font-size:12px;color:var(--text-soft)">Expenses, invoices & clients</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
@@ -742,15 +770,15 @@
       <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
         <div class="settings-cat-item" onclick="openSettingsCat('google')">
           <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#5AC8FA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">☁️</div>
-            <div style="font-weight:500;font-size:14px">Google & Sync</div>
+            <div style="width:36px;height:36px;border-radius:9px;background:#4285F4;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔗</div>
+            <div><div style="font-weight:500;font-size:14px">Google Services</div><div style="font-size:12px;color:var(--text-soft)">Sheets, Drive & Calendar</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
         <div class="settings-cat-item" onclick="openSettingsCat('aitools')" style="border-bottom:none">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#AF52DE;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🤖</div>
-            <div style="font-weight:500;font-size:14px">AI Tools</div>
+            <div><div style="font-weight:500;font-size:14px">AI Tools</div><div style="font-size:12px;color:var(--text-soft)">Smart pricing, booking import</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
@@ -758,201 +786,105 @@
 
       <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Advanced</div>
       <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsCat('storage')">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#636366;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🗄</div>
-            <div style="font-weight:500;font-size:14px">App Data</div>
-          </div>
-          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-        <div class="settings-cat-item" onclick="openSettingsCat('feel')" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">✨</div>
-            <div style="font-weight:500;font-size:14px">Feel & Gestures</div>
-          </div>
-          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- GOOGLE & SYNC SUB-SCREEN -->
-    <div id="settings-cat-google" style="display:none">
-      <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Sheets</div>
-      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsPanel('bookings-sync')">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📋</div>
-            <div><div style="font-weight:500;font-size:14px">Bookings Sync</div><div style="font-size:12px;color:var(--text-soft)">Pull & push booking data</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-        <div class="settings-cat-item" onclick="openSettingsPanel('expenses-sync')" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">💰</div>
-            <div><div style="font-weight:500;font-size:14px">Expenses Sync</div><div style="font-size:12px;color:var(--text-soft)">Sync expenses to sheet</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-      </div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Google Services</div>
-      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsPanel('drive')">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#4285F4;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📁</div>
-            <div><div style="font-weight:500;font-size:14px">Google Drive</div><div style="font-size:12px;color:var(--text-soft)" id="gdrive-status-row">Receipt storage</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-        <div class="settings-cat-item" onclick="openSettingsPanel('calendar')" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#1a73e8;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📅</div>
-            <div><div style="font-weight:500;font-size:14px">Google Calendar</div><div style="font-size:12px;color:var(--text-soft)">Push bookings as events</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-      </div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Advanced</div>
-      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsPanel('apps-script')">
+        <div class="settings-cat-item" onclick="openSettingsCat('advanced')" style="border-bottom:none">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#636366;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⚙️</div>
-            <div><div style="font-weight:500;font-size:14px">Apps Script</div><div style="font-size:12px;color:var(--text-soft)">Configure connection URL</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-        <div class="settings-cat-item" onclick="openSettingsPanel('backup');document.getElementById('backup-last-time').textContent=localStorage.getItem('gh-last-backup')||'Never'" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">☁️</div>
-            <div><div style="font-weight:500;font-size:14px">Backup & Restore</div><div style="font-size:12px;color:var(--text-soft)">Save or restore app data</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+            <div><div style="font-weight:500;font-size:14px">Advanced</div><div style="font-size:12px;color:var(--text-soft)">App data, feel & gestures</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
       </div>
     </div>
 
-    <!-- PANEL: BOOKINGS SYNC -->
-    <div id="settings-panel-bookings-sync" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google & Sync</div>
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-title">📋 Bookings — Google Sheets</div>
-        <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px">Last synced: <span id="settings-last-sync">—</span></div>
-        <div style="font-size:13px;color:var(--text-soft);margin-bottom:16px" id="settings-booking-count"></div>
-        <button class="btn-primary" onclick="syncFromSheets(true)">↻ Pull Bookings from Sheet</button>
-        <button class="btn-secondary" onclick="pullAppData(true)" id="pull-appdata-btn" style="margin-top:8px">↻ Pull App Data from Sheet</button>
-        <div id="pull-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
-        <div style="font-size:11px;color:var(--text-soft);margin-top:6px;line-height:1.5">Syncs cleaners, cleans, inventory &amp; notes from AppData tab.</div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push App Data to Sheet</div>
-          <button class="btn-primary" onclick="pushAllAppData()" id="push-appdata-btn">⬆ Push App Data to Sheet</button>
-          <div id="push-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
-        </div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push Bookings to Sheet</div>
-          <button class="btn-secondary" onclick="chooseGoogleAccount()" style="margin-bottom:6px">① Sign in / Switch Account</button>
-          <button class="btn-primary" onclick="syncToSheet()" style="background:var(--amber)">② Push All Bookings</button>
-        </div>
-        <div id="push-sync-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
-      </div>
-    </div>
-
-    <!-- PANEL: EXPENSES SYNC -->
-    <div id="settings-panel-expenses-sync" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google & Sync</div>
-      <div class="card">
-        <div class="card-title">💰 Expenses — Google Sheets</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Only updates what's missing or changed — doesn't replace everything.</div>
-        <button class="btn-primary" onclick="smartSyncExpenses()" style="background:#5AC8FA;color:white">☁️ Sync Expenses to Sheet</button>
-        <button class="btn-secondary" onclick="migrateCategoriesInSheet()" style="margin-top:6px">🔄 Update Category Names</button>
-        <div id="push-expenses-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
-      </div>
-    </div>
-
-    <!-- PANEL: GOOGLE DRIVE -->
-    <div id="settings-panel-drive" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google & Sync</div>
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-title">📁 Google Drive — Receipt Storage</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Connect to save receipts to a <strong>Glenhaven Receipts</strong> folder. Requires a Google OAuth Client ID.</div>
-        <label>OAuth Client ID</label>
-        <input type="text" id="gdrive-client-id" placeholder="xxxxx.apps.googleusercontent.com">
-        <button class="btn-secondary" onclick="saveGDriveClientId()">Save Client ID</button>
-        <div id="gdrive-client-confirm" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
-        <div style="margin-top:10px">
-          <button class="btn-primary" onclick="connectGoogleDrive()" id="gdrive-connect-btn">🔗 Connect Google Drive & Calendar</button>
-          <div id="gdrive-status" style="font-size:12px;margin-top:6px;color:var(--text-soft)"></div>
-        </div>
-        <div style="margin-top:10px;padding:10px;background:var(--mist);border-radius:var(--radius-sm);font-size:11px;color:var(--text-soft);line-height:1.6">
-          <strong>Setup:</strong><br>1. console.cloud.google.com<br>2. Create project → Enable Drive API<br>3. OAuth consent → External<br>4. Credentials → OAuth 2.0 Client ID (Web app)<br>5. Add your Netlify URL as authorised origin<br>6. Paste Client ID above
-        </div>
-      </div>
-    </div>
-
-    <!-- PANEL: CALENDAR -->
-    <div id="settings-panel-calendar" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google & Sync</div>
-      <div class="card">
-        <div class="card-title">📅 Google Calendar</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Push all bookings to Google Calendar as events. Uses the same Drive connection.</div>
-        <button class="btn-primary" onclick="syncToGoogleCalendar()" style="background:#1a73e8">📅 Sync Bookings to Calendar</button>
-        <div id="gcal-sync-result" style="display:none;font-size:12px;margin-top:8px;padding:8px;border-radius:8px"></div>
-      </div>
-    </div>
-
-    <!-- PANEL: APPS SCRIPT -->
-    <div id="settings-panel-apps-script" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google & Sync</div>
-      <div class="card">
-        <div class="card-title">⚙️ Apps Script Connection</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">The URL that connects the app to your Google Sheet.</div>
-        <label>Apps Script URL</label>
-        <input type="url" id="settings-script-url" placeholder="https://script.google.com/macros/s/...">
-        <button class="btn-secondary" onclick="saveScriptURL()">Save URL</button>
-        <button class="btn-secondary" onclick="testScriptConnection()" style="margin-top:6px;background:#E3F2FD;color:#1565C0">🔗 Test Connection</button>
-        <div id="script-url-confirm" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
-        <div id="script-test-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
-      </div>
-    </div>
-
-    <!-- PANEL: BACKUP -->
-    <div id="settings-panel-backup" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google & Sync</div>
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-title">☁️ Backup to Google Drive</div>
-        <div style="font-size:13px;color:var(--text-soft);margin-bottom:4px;line-height:1.5">Saves everything to a <strong>Glenhaven Backups</strong> folder. Keeps the last 30 backups.</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:16px">Last backup: <span id="backup-last-time">Never</span></div>
-        <button class="btn-primary" onclick="saveBackup()" style="background:#34C759">☁️ Backup Now</button>
-        <div id="backup-result" style="font-size:12px;margin-top:8px;display:none;padding:8px;border-radius:8px"></div>
-      </div>
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-title">⏰ Automatic Daily Backup</div>
-        <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px;line-height:1.5">Runs at 3am daily via Apps Script — no phone needed.</div>
-        <div style="padding:10px 12px;background:var(--mist);border-radius:var(--radius-sm);font-size:12px;color:var(--text-soft);line-height:1.6"><strong>One-time setup:</strong><br>1. Open Apps Script editor<br>2. Select <strong>createDailyTrigger</strong><br>3. Click ▶ Run — grant permissions<br>4. Done</div>
-      </div>
-      <div class="card">
-        <div class="card-title">🕐 Restore a Backup</div>
-        <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px">Load a previous backup. <strong style="color:var(--red)">Replaces all current data.</strong></div>
-        <button class="btn-secondary" onclick="listBackups()">🔄 Load Backup List</button>
-        <div id="backup-list" style="margin-top:12px"></div>
-      </div>
-    </div>
-
-    <!-- APP DATA SUB-SCREEN -->
-    <div id="settings-cat-storage" style="display:none">
-      <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-title">🔄 Reset & Re-sync</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Clears all locally cached data and pulls fresh from Google Sheets. Use this if something looks out of sync.</div>
-        <button class="btn-secondary" onclick="clearCacheAndResync()" style="background:#FEF2F2;color:var(--red)">Clear Cache & Re-sync</button>
-      </div>
-      <div class="card">
-        <div class="card-title">🗄 Local Storage</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Everything currently saved in the app on this device.</div>
-        <div id="storage-viewer"></div>
-        <button onclick="renderStorageViewer()" class="btn-secondary" style="margin-top:10px">🔄 Refresh</button>
-      </div>
-    </div>
-
-    <!-- PROPERTY & PEOPLE SUB-SCREEN -->
+    <!-- ═══════════════════════════════════════════════════════
+         PROPERTY SUB-SCREEN
+    ═══════════════════════════════════════════════════════ -->
     <div id="settings-cat-property" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Property</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('property-info')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏡</div>
+            <div><div style="font-weight:500;font-size:14px">Property Info</div><div style="font-size:12px;color:var(--text-soft)">Glenhaven, Katoomba</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('team')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👥</div>
+            <div><div style="font-weight:500;font-size:14px">Team</div><div style="font-size:12px;color:var(--text-soft)" id="team-count-row">Cleaners & contractors</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Messaging</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('sms-template')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#5AC8FA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📱</div>
+            <div><div style="font-weight:500;font-size:14px">SMS Template</div><div style="font-size:12px;color:var(--text-soft)">Cleaner notification message</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
 
-      <!-- PROPERTY INFO -->
-      <div class="card" style="margin-bottom:10px">
+    <!-- PANEL: TEAM LIST -->
+    <div id="settings-panel-team" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Property</div>
+      <div id="team-list-container"></div>
+      <div class="card" style="padding:0 16px;overflow:hidden">
+        <div class="settings-cat-item" onclick="openSettingsPanel('add-person')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">＋</div>
+            <div style="font-weight:500;font-size:14px;color:var(--forest)">Add Person</div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: ADD PERSON -->
+    <div id="settings-panel-add-person" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Team</div>
+      <div class="card">
+        <div class="card-title">👤 Add Person</div>
+        <div class="form-row">
+          <div class="field"><label>Name</label><input type="text" id="new-cleaner-name" placeholder="e.g. Megan"></div>
+          <div class="field"><label>Role</label>
+            <select id="new-cleaner-role">
+              <option value="Cleaner">Cleaner</option>
+              <option value="Plumber">Plumber</option>
+              <option value="Electrician">Electrician</option>
+              <option value="Landscaper">Landscaper</option>
+              <option value="Builder">Builder</option>
+              <option value="Handyman">Handyman</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <label>Mobile</label>
+        <input type="tel" id="new-cleaner-phone" placeholder="e.g. 0412 345 678">
+        <label>Email</label>
+        <input type="email" id="new-cleaner-email" placeholder="e.g. megan@email.com">
+        <label>PIN (4 digits)</label>
+        <input type="text" id="new-cleaner-pin" inputmode="numeric" pattern="\d*" maxlength="4" placeholder="e.g. 1234" oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
+        <div style="font-size:11px;color:var(--text-soft);margin-top:-6px;margin-bottom:10px">Used to log in to their cleaner app. Can be set or changed later.</div>
+        <button class="btn-primary" onclick="addCleaner()">Add Person</button>
+      </div>
+    </div>
+
+    <!-- PANEL: CLEANER PROFILE (rendered dynamically) -->
+    <div id="settings-panel-cleaner-profile" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Team</div>
+      <div id="cleaner-profile-content"></div>
+    </div>
+
+    <!-- PANEL: PROPERTY INFO -->
+    <div id="settings-panel-property-info" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Property</div>
+      <div class="card">
         <div class="card-title">🏡 Property Info</div>
         <div class="detail-row"><span class="detail-label">Property</span><span class="detail-val">Glenhaven</span></div>
         <div class="detail-row"><span class="detail-label">Location</span><span class="detail-val">Katoomba, NSW</span></div>
@@ -960,45 +892,60 @@
         <div class="detail-row"><span class="detail-label">Max Guests</span><span class="detail-val">8</span></div>
         <div class="detail-row"><span class="detail-label">Bathrooms</span><span class="detail-val">2.5</span></div>
       </div>
+    </div>
 
-      <!-- CLEANERS & CONTRACTORS -->
+    <!-- PANEL: PUSH NOTIFICATIONS -->
+    <div id="settings-panel-notifications" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Back</div>
       <div class="card" style="margin-bottom:10px">
-        <div class="card-title">🧹 Cleaners & Contractors</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Cleaners appear in the Cleaning tab. All roles appear in Maintenance as contractors.</div>
-        <div id="cleaners-list"></div>
-        <div style="border-top:1px solid var(--warm);margin-top:12px;padding-top:12px">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:8px">Add Person</div>
-          <div class="form-row">
-            <div class="field"><label>Name</label><input type="text" id="new-cleaner-name" placeholder="e.g. Megan"></div>
-            <div class="field"><label>Mobile</label><input type="tel" id="new-cleaner-phone" placeholder="e.g. 0412 345 678"></div>
-          </div>
-          <label>Role</label>
-          <select id="new-cleaner-role">
-            <option value="Cleaner">Cleaner</option>
-            <option value="Plumber">Plumber</option>
-            <option value="Electrician">Electrician</option>
-            <option value="Landscaper">Landscaper</option>
-            <option value="Builder">Builder</option>
-            <option value="Handyman">Handyman</option>
-            <option value="Other">Other</option>
-          </select>
-          <button class="btn-primary" style="margin-top:4px" onclick="addCleaner()">Add Person</button>
-        </div>
-      </div>
-
-      <!-- PUSH NOTIFICATIONS -->
-      <div class="card">
         <div class="card-title">🔔 Push Notifications</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Get notified when your cleaner accepts, declines, or completes a clean. On iPhone, you must tap the button below — iOS requires a manual tap to enable notifications.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Get notified when your cleaner accepts, declines, or completes a clean. On iPhone, you must tap the button below — iOS requires a manual tap.</div>
         <div id="notif-status" style="font-size:12px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:var(--warm);color:var(--text-soft)">Checking status…</div>
         <button class="btn-primary" onclick="enableNotificationsManually()" id="notif-enable-btn">🔔 Enable Notifications on This Device</button>
         <div id="notif-result" style="font-size:12px;margin-top:8px;display:none"></div>
       </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">✉️ Email Notifications</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Automatically emails your cleaner when you assign a clean, and again 24 hours before. Sent via Gmail through your Apps Script.</div>
+        <div style="background:var(--mist);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:14px">
+          ✅ Uses your existing Apps Script connection<br>
+          ✅ Sent from your Gmail account<br>
+          ✅ Completely free<br>
+          ⚙️ Add emails to cleaners in <strong>Settings → Property → Team</strong>
+        </div>
+        <button class="btn-secondary" onclick="testCleanerEmail()">✉️ Send Test Email to Me</button>
+        <div id="email-test-result" style="font-size:12px;margin-top:8px;display:none;padding:8px;border-radius:8px"></div>
+      </div>
+      <div class="card" style="padding:0 16px;overflow:hidden">
+        <div class="settings-cat-item" onclick="openEmailTemplatePanel('assignment')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📋</div>
+            <div><div style="font-weight:500;font-size:14px">Assignment Email</div><div style="font-size:12px;color:var(--text-soft)">Sent when you assign a clean</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openEmailTemplatePanel('reminder')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#E65100;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⏰</div>
+            <div><div style="font-weight:500;font-size:14px">Reminder Email</div><div style="font-size:12px;color:var(--text-soft)">Sent 24 hours before the clean</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
 
-      <!-- CLEANING NOTIFICATION MESSAGE -->
+    <!-- PANEL: EMAIL TEMPLATE EDITOR -->
+    <div id="settings-panel-email-template" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Notifications</div>
+      <div id="email-template-content"></div>
+    </div>
+
+    <!-- PANEL: SMS TEMPLATE -->
+    <div id="settings-panel-sms-template" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Property</div>
       <div class="card">
         <div class="card-title">📱 Cleaning Notification Message</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:8px">This message is sent to your cleaner when you tap <strong>Notify</strong> on a booking. Use these placeholders to personalise it:</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:8px">Sent to your cleaner when you tap <strong>Notify</strong>. Use placeholders to personalise:</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
           <span style="font-size:11px;background:var(--warm);color:var(--forest);padding:3px 8px;border-radius:6px;font-weight:600">{cleanerFirstName}</span>
           <span style="font-size:11px;background:var(--warm);color:var(--forest);padding:3px 8px;border-radius:6px;font-weight:600">{cleanerName}</span>
@@ -1014,21 +961,61 @@
       </div>
     </div>
 
-    <!-- LEGACY CLEANING SUB-SCREEN (hidden — content moved to Property & People) -->
-    <div id="settings-cat-cleaning" style="display:none"></div>
-    <!-- INVOICE (legacy hidden — content moved to Expenses & Invoices) -->
-    <div id="settings-cat-invoice" style="display:none"></div>
-
-    <!-- SCREENSHOT (legacy hidden — moved to AI Tools) -->
-    <div id="settings-cat-screenshot" style="display:none"></div>
-
-    <!-- PROPERTY & PEOPLE SUB-SCREEN -->
-    <!-- EXPENSES & INVOICES SUB-SCREEN -->
-    <div id="settings-cat-expenses" style="display:none">
+    <!-- ═══════════════════════════════════════════════════════
+         TEAM ACCESS SUB-SCREEN (Cleaner)
+    ═══════════════════════════════════════════════════════ -->
+    <div id="settings-cat-cleaner" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
-      <div class="card" style="margin-bottom:10px">
-        <div class="card-title">💰 Expense Categories</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Tap a category to rename it. These appear in the Expenses tab and on exports.</div>
+      <div id="cleaner-access-list"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         FINANCE SUB-SCREEN
+    ═══════════════════════════════════════════════════════ -->
+    <div id="settings-cat-finance" style="display:none">
+      <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Expenses</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('expense-cats')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏷️</div>
+            <div><div style="font-weight:500;font-size:14px">Expense Categories</div><div style="font-size:12px;color:var(--text-soft)">Manage & rename categories</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Invoicing</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('invoice-details')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#5AC8FA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🧾</div>
+            <div><div style="font-weight:500;font-size:14px">Your Invoice Details</div><div style="font-size:12px;color:var(--text-soft)">Name, ABN, address</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('bank-details')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏦</div>
+            <div><div style="font-weight:500;font-size:14px">Bank Details</div><div style="font-size:12px;color:var(--text-soft)">BSB, account number</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('invoice-clients')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#AF52DE;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👥</div>
+            <div><div style="font-weight:500;font-size:14px">Clients</div><div style="font-size:12px;color:var(--text-soft)">Who you bill to</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: EXPENSE CATEGORIES -->
+    <div id="settings-panel-expense-cats" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Finance</div>
+      <div class="card">
+        <div class="card-title">🏷️ Expense Categories</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Tap a category to rename it.</div>
         <div id="expense-cats-list"></div>
         <div style="border-top:1px solid var(--warm);margin-top:12px;padding-top:12px">
           <label>Add New Category</label>
@@ -1037,9 +1024,14 @@
         </div>
         <button class="btn-secondary" onclick="resetExpenseCats()" style="margin-top:8px">Reset to Defaults</button>
       </div>
-      <div class="card" style="margin-bottom:10px">
+    </div>
+
+    <!-- PANEL: INVOICE DETAILS -->
+    <div id="settings-panel-invoice-details" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Finance</div>
+      <div class="card">
         <div class="card-title">🧾 Your Invoice Details</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Appears as the sender on all invoices you generate.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Appears as the sender on all invoices.</div>
         <label>Contact Name</label>
         <input type="text" id="inv-name" placeholder="e.g. Michel Chaddy">
         <label>Company Name</label>
@@ -1055,7 +1047,12 @@
         <button class="btn-primary" onclick="saveInvoiceDetails()">Save Details</button>
         <div id="inv-save-confirm" style="font-size:12px;color:var(--moss);margin-top:6px;display:none">✓ Saved</div>
       </div>
-      <div class="card" style="margin-bottom:10px">
+    </div>
+
+    <!-- PANEL: BANK DETAILS -->
+    <div id="settings-panel-bank-details" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Finance</div>
+      <div class="card">
         <div class="card-title">🏦 Bank Details</div>
         <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Shown on invoices so clients know how to pay you.</div>
         <label>Account Name</label>
@@ -1069,9 +1066,14 @@
         <button class="btn-primary" onclick="saveBankDetails()">Save Bank Details</button>
         <div id="inv-bank-confirm" style="font-size:12px;color:var(--moss);margin-top:6px;display:none">✓ Saved</div>
       </div>
+    </div>
+
+    <!-- PANEL: INVOICE CLIENTS -->
+    <div id="settings-panel-invoice-clients" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Finance</div>
       <div class="card">
         <div class="card-title">👥 Invoice Clients</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Companies or individuals you invoice. The "Bill To" on each invoice is populated from here.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Companies or individuals you invoice.</div>
         <div id="clients-list" style="margin-bottom:12px"></div>
         <div style="border-top:1px solid var(--warm);padding-top:12px;margin-top:4px">
           <div style="font-weight:600;font-size:13px;margin-bottom:8px">Add Client</div>
@@ -1088,44 +1090,190 @@
       </div>
     </div>
 
-    <!-- AI TOOLS SUB-SCREEN -->
-    <div id="settings-cat-aitools" style="display:none">
+    <!-- ═══════════════════════════════════════════════════════
+         GOOGLE SERVICES SUB-SCREEN
+    ═══════════════════════════════════════════════════════ -->
+    <div id="settings-cat-google" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('sheets')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📊</div>
+            <div><div style="font-weight:500;font-size:14px">Google Sheets</div><div style="font-size:12px;color:var(--text-soft)">Sync bookings, expenses & data</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('drive')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#4285F4;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📁</div>
+            <div><div style="font-weight:500;font-size:14px">Google Drive</div><div style="font-size:12px;color:var(--text-soft)" id="gdrive-status-row">Receipts & backups</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('calendar')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#1a73e8;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📅</div>
+            <div><div style="font-weight:500;font-size:14px">Google Calendar</div><div style="font-size:12px;color:var(--text-soft)">Push bookings as events</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: GOOGLE SHEETS (all sheets-related in one place) -->
+    <div id="settings-panel-sheets" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google Services</div>
       <div class="card" style="margin-bottom:10px">
-        <div class="card-title">🚫 AI Analysis Ignore List</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Items you've dismissed from the expense analysis. Claude won't flag these again.</div>
-        <div id="ai-ignore-list-display"></div>
-        <button onclick="renderAIIgnoreList()" class="btn-secondary" style="margin-top:8px">↻ Refresh</button>
+        <div class="card-title">📊 Bookings Sync</div>
+        <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px">Last synced: <span id="settings-last-sync">—</span></div>
+        <div style="font-size:13px;color:var(--text-soft);margin-bottom:16px" id="settings-booking-count"></div>
+        <button class="btn-primary" onclick="syncFromSheets(true)">↻ Pull Bookings from Sheet</button>
+        <button class="btn-secondary" onclick="pullAppData(true)" id="pull-appdata-btn" style="margin-top:8px">↻ Pull App Data from Sheet</button>
+        <div id="pull-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:6px;line-height:1.5">Syncs cleaners, cleans, inventory &amp; notes from AppData tab.</div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push to Sheet</div>
+          <button class="btn-primary" onclick="pushAllAppData()" id="push-appdata-btn">⬆ Push App Data to Sheet</button>
+          <div id="push-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
+          <button class="btn-secondary" onclick="chooseGoogleAccount()" style="margin-top:8px;margin-bottom:6px">① Sign in / Switch Account</button>
+          <button class="btn-primary" onclick="syncToSheet()" style="background:var(--amber)">② Push All Bookings</button>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Debug</div>
+          <button class="btn-secondary" onclick="debugCSVColumns()" style="font-size:12px">🔍 Show CSV Column Layout</button>
+          <div id="csv-debug-result" style="display:none;margin-top:8px;font-size:11px;font-family:monospace;background:#f4f4f4;padding:10px;border-radius:8px;word-break:break-all;line-height:1.8"></div>
+        </div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">💰 Expenses Sync</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Only updates what's missing or changed.</div>
+        <button class="btn-primary" onclick="smartSyncExpenses()" style="background:#5AC8FA;color:white">☁️ Sync Expenses to Sheet</button>
+        <button class="btn-secondary" onclick="migrateCategoriesInSheet()" style="margin-top:6px">🔄 Update Category Names</button>
+        <div id="push-expenses-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
       </div>
       <div class="card">
+        <div class="card-title">⚙️ Apps Script Connection</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">The URL that connects the app to your Google Sheet.</div>
+        <label>Apps Script URL</label>
+        <input type="url" id="settings-script-url" placeholder="https://script.google.com/macros/s/...">
+        <button class="btn-secondary" onclick="saveScriptURL()">Save URL</button>
+        <button class="btn-secondary" onclick="testScriptConnection()" style="margin-top:6px;background:#E3F2FD;color:#1565C0">🔗 Test Connection</button>
+        <div id="script-url-confirm" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
+        <div id="script-test-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
+      </div>
+    </div>
+
+    <!-- PANEL: GOOGLE DRIVE (connect + receipts + backup all together) -->
+    <div id="settings-panel-drive" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google Services</div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">📁 Connect Google Drive</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Connect to save receipts to a <strong>Glenhaven Receipts</strong> folder. Requires a Google OAuth Client ID.</div>
+        <label>OAuth Client ID</label>
+        <input type="text" id="gdrive-client-id" placeholder="xxxxx.apps.googleusercontent.com">
+        <button class="btn-secondary" onclick="saveGDriveClientId()">Save Client ID</button>
+        <div id="gdrive-client-confirm" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
+        <div style="margin-top:10px">
+          <button class="btn-primary" onclick="connectGoogleDrive()" id="gdrive-connect-btn">🔗 Connect Google Drive & Calendar</button>
+          <div id="gdrive-status" style="font-size:12px;margin-top:6px;color:var(--text-soft)"></div>
+        </div>
+        <div style="margin-top:10px;padding:10px;background:var(--mist);border-radius:var(--radius-sm);font-size:11px;color:var(--text-soft);line-height:1.6">
+          <strong>Setup:</strong><br>1. console.cloud.google.com<br>2. Create project → Enable Drive API<br>3. OAuth consent → External<br>4. Credentials → OAuth 2.0 Client ID (Web app)<br>5. Add your Netlify URL as authorised origin<br>6. Paste Client ID above
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">☁️ Backup to Google Drive</div>
+        <div style="font-size:13px;color:var(--text-soft);margin-bottom:4px;line-height:1.5">Saves everything to a <strong>Glenhaven Backups</strong> folder. Keeps the last 30 backups.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:16px">Last backup: <span id="backup-last-time">Never</span></div>
+        <button class="btn-primary" onclick="saveBackup()" style="background:#34C759">☁️ Backup Now</button>
+        <div id="backup-result" style="font-size:12px;margin-top:8px;display:none;padding:8px;border-radius:8px"></div>
+      </div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">⏰ Automatic Daily Backup</div>
+        <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px;line-height:1.5">Runs at 3am daily via Apps Script.</div>
+        <div style="padding:10px 12px;background:var(--mist);border-radius:var(--radius-sm);font-size:12px;color:var(--text-soft);line-height:1.6"><strong>One-time setup:</strong><br>1. Open Apps Script editor<br>2. Select <strong>createDailyTrigger</strong><br>3. Click ▶ Run — grant permissions</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🕐 Restore a Backup</div>
+        <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px"><strong style="color:var(--red)">Replaces all current data.</strong></div>
+        <button class="btn-secondary" onclick="listBackups()">🔄 Load Backup List</button>
+        <div id="backup-list" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <!-- PANEL: GOOGLE CALENDAR -->
+    <div id="settings-panel-calendar" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google Services</div>
+      <div class="card">
+        <div class="card-title">📅 Google Calendar</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Push all bookings to Google Calendar as events. Uses the same Drive connection — connect Drive first.</div>
+        <button class="btn-primary" onclick="syncToGoogleCalendar()" style="background:#1a73e8">📅 Sync Bookings to Calendar</button>
+        <div id="gcal-sync-result" style="display:none;font-size:12px;margin-top:8px;padding:8px;border-radius:8px"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         AI TOOLS SUB-SCREEN
+    ═══════════════════════════════════════════════════════ -->
+    <div id="settings-cat-aitools" style="display:none">
+      <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">AI Tools</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('ai-import')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#AF52DE;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📸</div>
+            <div><div style="font-weight:500;font-size:14px">AI Booking Import</div><div style="font-size:12px;color:var(--text-soft)">Screenshot → booking data</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('smart-pricing')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📈</div>
+            <div><div style="font-weight:500;font-size:14px">Smart Pricing</div><div style="font-size:12px;color:var(--text-soft)">AI rate recommendations</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('ai-ignore')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#636366;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🚫</div>
+            <div><div style="font-weight:500;font-size:14px">AI Ignore List</div><div style="font-size:12px;color:var(--text-soft)">Dismissed expense items</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: AI BOOKING IMPORT -->
+    <div id="settings-panel-ai-import" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ AI Tools</div>
+      <div class="card">
         <div class="card-title">📸 AI Booking Import</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Take a screenshot of an Airbnb or VRBO confirmation and the AI reads it and fills in all booking details automatically. Powered by Anthropic Claude.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Take a screenshot of an Airbnb or VRBO confirmation and the AI reads it and fills in all booking details automatically.</div>
         <label>Anthropic API Key</label>
         <input type="password" id="settings-api-key" placeholder="sk-ant-...">
         <button class="btn-secondary" onclick="saveApiKey()">Save API Key</button>
         <div id="api-key-confirm" style="font-size:12px;color:var(--moss);margin-top:6px;display:none">✓ Saved — stored on this device only</div>
       </div>
+    </div>
+
+    <!-- PANEL: SMART PRICING -->
+    <div id="settings-panel-smart-pricing" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ AI Tools</div>
       <div class="card">
         <div class="card-title">📈 Smart Pricing</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">AI-powered nightly rate recommendations based on your booking history, Blue Mountains seasons, NSW public holidays and local demand. Uses your Anthropic API key from AI Tools above.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">AI-powered nightly rate recommendations based on your booking history and local demand.</div>
         <label>Forecast Period</label>
         <select id="pricing-period">
           <option value="30">Next 30 days</option>
           <option value="60">Next 60 days</option>
           <option value="90">Next 90 days</option>
           <option disabled>── Specific Month ──</option>
-          <option value="month-0">January</option>
-          <option value="month-1">February</option>
-          <option value="month-2">March</option>
-          <option value="month-3">April</option>
-          <option value="month-4">May</option>
-          <option value="month-5">June</option>
-          <option value="month-6">July</option>
-          <option value="month-7">August</option>
-          <option value="month-8">September</option>
-          <option value="month-9">October</option>
-          <option value="month-10">November</option>
-          <option value="month-11">December</option>
+          <option value="month-0">January</option><option value="month-1">February</option>
+          <option value="month-2">March</option><option value="month-3">April</option>
+          <option value="month-4">May</option><option value="month-5">June</option>
+          <option value="month-6">July</option><option value="month-7">August</option>
+          <option value="month-8">September</option><option value="month-9">October</option>
+          <option value="month-10">November</option><option value="month-11">December</option>
         </select>
         <label>Your Current Base Rate ($/night)</label>
         <input type="number" id="pricing-base-rate" placeholder="e.g. 350">
@@ -1135,24 +1283,66 @@
       </div>
     </div>
 
-    <!-- SMART PRICING (legacy hidden — moved to AI Tools) -->
-    <div id="settings-cat-pricing" style="display:none"></div>
-
-    <!-- FEEL & GESTURES SUB-SCREEN -->
-    <!-- CLEANER ACCESS SUB-SCREEN -->
-    <div id="settings-cat-cleaner" style="display:none">
-      <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
-      <div id="cleaner-access-list"></div>
-      <div class="card" style="margin-bottom:12px;background:var(--forest);color:white">
-        <div style="font-size:13px;line-height:1.6;opacity:0.85">Each cleaner gets their own private link + PIN. Go to <strong>Property &amp; People</strong> to add cleaners first.</div>
+    <!-- PANEL: AI IGNORE LIST -->
+    <div id="settings-panel-ai-ignore" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ AI Tools</div>
+      <div class="card">
+        <div class="card-title">🚫 AI Analysis Ignore List</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Items you've dismissed. Claude won't flag these again.</div>
+        <div id="ai-ignore-list-display"></div>
+        <button onclick="renderAIIgnoreList()" class="btn-secondary" style="margin-top:8px">↻ Refresh</button>
       </div>
     </div>
 
-    <div id="settings-cat-feel" style="display:none">
+    <!-- ═══════════════════════════════════════════════════════
+         ADVANCED SUB-SCREEN
+    ═══════════════════════════════════════════════════════ -->
+    <div id="settings-cat-advanced" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Data</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('app-data')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#636366;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🗄</div>
+            <div><div style="font-weight:500;font-size:14px">App Data</div><div style="font-size:12px;color:var(--text-soft)">Reset, re-sync, local storage</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Experience</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
+        <div class="settings-cat-item" onclick="openSettingsPanel('feel')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">✨</div>
+            <div><div style="font-weight:500;font-size:14px">Feel & Gestures</div><div style="font-size:12px;color:var(--text-soft)">Animations & interactions</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: APP DATA -->
+    <div id="settings-panel-app-data" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Advanced</div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">🔄 Reset & Re-sync</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Clears all locally cached data and pulls fresh from Google Sheets.</div>
+        <button class="btn-secondary" onclick="clearCacheAndResync()" style="background:#FEF2F2;color:var(--red)">Clear Cache & Re-sync</button>
+      </div>
+      <div class="card">
+        <div class="card-title">🗄 Local Storage</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Everything currently saved on this device.</div>
+        <div id="storage-viewer"></div>
+        <button onclick="renderStorageViewer()" class="btn-secondary" style="margin-top:10px">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <!-- PANEL: FEEL & GESTURES -->
+    <div id="settings-panel-feel" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Advanced</div>
       <div class="card">
         <div class="card-title">✨ Feel & Gestures</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:16px">Customise how the app feels to use. Changes take effect immediately.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:16px">Changes take effect immediately.</div>
         <div class="ios-toggle-row">
           <div><div class="ios-toggle-label">Swipe to Go Back</div><div class="ios-toggle-sub">Swipe right from the left edge to go back</div></div>
           <label class="ios-toggle"><input type="checkbox" id="fx-swipe-back" onchange="saveFxSetting('swipeBack',this.checked)"><div class="ios-toggle-track"></div><div class="ios-toggle-thumb"></div></label>
@@ -1171,6 +1361,15 @@
         </div>
       </div>
     </div>
+
+    <!-- Legacy hidden screens -->
+    <div id="settings-cat-storage" style="display:none"></div>
+    <div id="settings-cat-expenses" style="display:none"></div>
+    <div id="settings-cat-cleaning" style="display:none"></div>
+    <div id="settings-cat-invoice" style="display:none"></div>
+    <div id="settings-cat-screenshot" style="display:none"></div>
+    <div id="settings-cat-pricing" style="display:none"></div>
+    <div id="settings-cat-feel" style="display:none"></div>
 
   </div>
 </div>
@@ -1366,6 +1565,17 @@
 </div>
 
 <script>
+// ── HTML ESCAPE HELPER — use for any user/sheet data injected into innerHTML ──
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── CONFIG ────────────────────────────────────────────────────────────────
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTlssTFmteUx1q3NkqRz2hAIqtJbt8OlRxl8VcX1x5gW6mI8W52n3xutATDO13qlRNoobKSsmVPciDR/pub?gid=0&single=true&output=csv";
 const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzM0wcdsUqK03faXxk2VqTAEqzno4GCAMzFYGrUXc4y1LKDwd8GbCKhNJruvbXJGhOflw/exec";
@@ -1420,23 +1630,24 @@ async function enableNotificationsManually() {
 
 function updateNotifStatus() {
   const el = document.getElementById('notif-status');
-  if (!el) return;
+  const menuRow = document.getElementById('notif-status-row-menu');
+  if (!el && !menuRow) return;
   if (!('Notification' in window)) {
-    el.textContent = '⚠️ Notifications not supported on this browser.';
-    el.style.background = '#FDECEA'; el.style.color = 'var(--red)';
+    if (el) { el.textContent = '⚠️ Notifications not supported on this browser.'; el.style.background = '#FDECEA'; el.style.color = 'var(--red)'; }
+    if (menuRow) menuRow.textContent = '⚠️ Not supported';
     return;
   }
   const perm = Notification.permission;
   const sub = getOwnerSub();
   if (perm === 'granted' && sub) {
-    el.textContent = '✅ Notifications active on this device.';
-    el.style.background = '#F0FAF4'; el.style.color = 'var(--moss)';
+    if (el) { el.textContent = '✅ Notifications active on this device.'; el.style.background = '#F0FAF4'; el.style.color = 'var(--moss)'; }
+    if (menuRow) menuRow.textContent = '✅ Active';
   } else if (perm === 'denied') {
-    el.textContent = '❌ Notifications blocked — change in device Settings.';
-    el.style.background = '#FDECEA'; el.style.color = 'var(--red)';
+    if (el) { el.textContent = '❌ Notifications blocked — change in device Settings.'; el.style.background = '#FDECEA'; el.style.color = 'var(--red)'; }
+    if (menuRow) menuRow.textContent = '❌ Blocked';
   } else {
-    el.textContent = '⚪ Notifications not yet enabled on this device.';
-    el.style.background = 'var(--warm)'; el.style.color = 'var(--text-soft)';
+    if (el) { el.textContent = '⚪ Notifications not yet enabled on this device.'; el.style.background = 'var(--warm)'; el.style.color = 'var(--text-soft)'; }
+    if (menuRow) menuRow.textContent = 'Tap to set up';
   }
 }
 
@@ -1503,6 +1714,28 @@ async function sendPushToDevice(subscription, title, body, url, tag) {
 function getOwnerSub() { return getPushSubs().owner || null; }
 function getCleanerSub(cleanerId) { return (getPushSubs().cleaners || {})[String(cleanerId)] || null; }
 
+async function getFreshOwnerSub() {
+  // Always pull latest pushSubs from Sheet — owner sub lives on owner's device
+  try {
+    const url = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+    if (url && url.includes('script.google.com')) {
+      const resp = await fetch(url + '?action=getAppData');
+      const json = await resp.json();
+      if (json.success && json.data && json.data.pushSubs) {
+        const local = getPushSubs();
+        const merged = {
+          owner: json.data.pushSubs.owner || local.owner,
+          cleaners: Object.assign({}, json.data.pushSubs.cleaners, local.cleaners)
+        };
+        localStorage.setItem('gh-push-subs', JSON.stringify(merged));
+        console.log('Refreshed pushSubs, owner sub:', merged.owner ? 'found' : 'NOT FOUND');
+        return merged.owner || null;
+      }
+    }
+  } catch(e) { console.warn('Could not refresh pushSubs for owner:', e); }
+  return getOwnerSub();
+}
+
 // Register service worker on load
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(e => console.warn('SW register failed:', e));
@@ -1523,7 +1756,7 @@ function sheetPost(scriptUrl, action, data) {
 
 // ── STATE ────────────────────────────────────────────────────────────────
 let bookingFilter = 'upcoming';
-let cleanFilter = 'confirmed';
+let cleanFilter = 'upcoming';
 function loadJSON(key, fallback) {
   fallback = fallback !== undefined ? fallback : [];
   try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); }
@@ -1591,8 +1824,35 @@ async function syncFromSheets(manual = false) {
     const csv = await res.text();
     const lines = csv.trim().split('\n').filter(l => l.trim());
     if (lines.length < 2) throw new Error('Sheet returned no data rows');
-    // Debug: log first data row so date format is visible in console
-    if (lines.length > 1) {}
+    // Temporary debug — store header layout for display
+    const headerCols = parseCSVLine(lines[0]);
+    window._csvDebug = 'HEADERS:\n' + headerCols.map((h,i) => `[${i}] col ${String.fromCharCode(65+i)}: "${h}"`).join('\n');
+    console.log('[CSV Debug]', window._csvDebug);
+
+    // Parse header row to find column indices dynamically
+    const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+    const col = {
+      checkin:          headers.indexOf('check-in date') >= 0 ? headers.indexOf('check-in date') : 0,
+      nights:           1,
+      checkout:         headers.indexOf('check-out date') >= 0 ? headers.indexOf('check-out date') : 2,
+      name:             3,
+      guests:           4,
+      hostPayout:       5,
+      cleaningFee:      6,
+      mgmt:             7,
+      mgmtPayout:       8,
+      netPayout:        9,
+      cleanerConfirmed: 10,
+      platform:         headers.findIndex(h => h.includes('platform')),
+      confirmCode:      headers.findIndex(h => h.includes('confirmation code') || h === 'confirmation' || (h.includes('confirm') && !h.includes('cleaner'))),
+      status:           headers.findIndex(h => h.includes('status')),
+    };
+    // Fall back to positional defaults if headers not recognised
+    if (col.platform < 0)     col.platform = 11;
+    if (col.confirmCode < 0)  col.confirmCode = 12;
+    if (col.status < 0)       col.status = 13;
+    console.log('[CSV] Column map:', col);
+    window._csvDebug += '\n\nDETECTED COLUMNS:\n' + Object.entries(col).map(([k,v]) => `${k}: [${v}] = "${headers[v] || 'n/a'}"`).join('\n');
 
     const imported = [];
     let skipped = 0;
@@ -1600,30 +1860,32 @@ async function syncFromSheets(manual = false) {
       if (i === 0) return;
       const p = parseCSVLine(line);
       if (!p[0] && !p[3]) return; // skip empty rows
-      const name = String(p[3] || '').trim();
-      const checkin = toISO(String(p[0] || '').trim());
-      if (!name || !checkin) { skipped++; return; } // skip rows with no name or date
+      const name = String(p[col.name] || '').trim();
+      const checkin = toISO(String(p[col.checkin] || '').trim());
+      if (!name || !checkin) { skipped++; return; }
 
-      const checkout = toISO(String(p[2] || '').trim());
-      const nights = Number(p[1]) || 1;
-      const hostPayout = toNum(p[5]);
-      const cleaningFee = toNum(p[6]);
-      const mgmtRaw = String(p[7] || '').trim();
-      // Sheet column H can be: "0.1" (decimal fraction), "10" (plain percent), "10%" (percent string)
-      // We store mgmtFeeRaw as the plain % number (e.g. 10) and mgmtDecimal as fraction (e.g. 0.10)
+      const checkout = toISO(String(p[col.checkout] || '').trim());
+      const nights = Number(p[col.nights]) || 1;
+      const hostPayout = toNum(p[col.hostPayout]);
+      const cleaningFee = toNum(p[col.cleaningFee]);
+      const mgmtRaw = String(p[col.mgmt] || '').trim();
       let mgmtDecimal = 0;
       if (mgmtRaw.includes('%')) {
-        mgmtDecimal = toNum(mgmtRaw) / 100;          // "10%" → 0.10
+        mgmtDecimal = toNum(mgmtRaw) / 100;
       } else {
         const n = toNum(mgmtRaw);
-        mgmtDecimal = n > 1 ? n / 100 : n;           // "10" → 0.10 | "0.10" → 0.10
+        mgmtDecimal = n > 1 ? n / 100 : n;
       }
-      const mgmtFeeRaw = Math.round(mgmtDecimal * 100 * 10) / 10; // fraction → plain % e.g. 10
+      const mgmtFeeRaw = Math.round(mgmtDecimal * 100 * 10) / 10;
       const mgmtFee = Math.round(hostPayout * mgmtDecimal * 100) / 100;
-      const mgmtPayout = toNum(p[8]);
-      const netPayout = toNum(p[9]) || Math.round((hostPayout - cleaningFee - mgmtFee) * 100) / 100;
-      const cleanerConfirmed = ['yes','true','1','TRUE'].includes(String(p[10] || '').trim());
-      const platform = String(p[11] || '').trim();
+      const mgmtPayout = toNum(p[col.mgmtPayout]);
+      const netPayout = toNum(p[col.netPayout]) || Math.round((hostPayout - cleaningFee - mgmtFee) * 100) / 100;
+      const cleanerConfirmed = ['yes','true','1','TRUE'].includes(String(p[col.cleanerConfirmed] || '').trim());
+      const platform = String(p[col.platform] || '').trim();
+      const confirmCode = String(p[col.confirmCode] || '').trim();
+      const sheetStatus = String(p[col.status] || '').trim().toLowerCase().replace(/\s+/g, '');
+      const isCancelled = sheetStatus.includes('cancel');
+      console.log(`[CSV Row ${i}] name="${name}" status_col=[${col.status}] raw="${p[col.status]}" isCancelled:${isCancelled}`);
 
       // Preserve local data by matching on name+checkin (more reliable than name alone)
       const existingB = bookings.find(b => 
@@ -1631,17 +1893,16 @@ async function syncFromSheets(manual = false) {
         b.name && b.name.toLowerCase() === name.toLowerCase()
       );
       const finalMgmtFeeRaw = mgmtFeeRaw || (existingB ? existingB.mgmtFeeRaw : 0);
-      // Preserve platform from existing booking if sheet doesn't have it yet
-      const finalPlatform = platform || (existingB ? existingB.platform : '');
       imported.push({
-        id: existingB ? existingB.id : (i * 1000 + 1),
+        id: existingB ? existingB.id : (Date.now() + i),
         checkin, checkout, nights, name,
-        guests: Number(p[4]) || 1,
+        guests: Number(p[col.guests]) || 1,
         hostPayout, cleaningFee, mgmtFee, mgmtFeeRaw: finalMgmtFeeRaw, mgmtPayout, netPayout,
         cleanerConfirmed,
-        platform: finalPlatform,
-        status: existingB && existingB.status === 'cancelled' ? 'cancelled' : getStatus(checkin),
-        gcalEventId: existingB ? (existingB.gcalEventId || null) : null, // preserve calendar link
+        platform,
+        confirmCode,
+        status: isCancelled ? 'cancelled' : getStatus(checkin),
+        gcalEventId: existingB ? (existingB.gcalEventId || null) : null,
         _fromSheet: true
       });
     });
@@ -1727,7 +1988,8 @@ function finishSync(imported, skipped, manual) {
   localStorage.setItem('gh-last-sync', syncTime);
   renderAll();
   const calMsg = toDeleteFromCal.length ? ` · ${toDeleteFromCal.length} calendar event${toDeleteFromCal.length > 1 ? 's' : ''} removed` : '';
-  showBanner('✓ Synced — ' + bookings.length + ' bookings (sheet: ' + imported.length + ')' + (skipped ? ` (${skipped} rows skipped)` : '') + calMsg, 'ok');
+  const cancelledCount = imported.filter(b => b.status === 'cancelled').length;
+  showBanner('✓ Synced — ' + bookings.length + ' bookings' + (cancelledCount ? ` · ${cancelledCount} cancelled` : '') + (skipped ? ` (${skipped} skipped)` : '') + calMsg, 'ok');
   if (manual) syncNewBookingsToCalendar();
 }
 
@@ -1819,12 +2081,12 @@ function renderAll() {
 }
 
 function renderDashboard() {
-  document.getElementById('stat-bookings').textContent = bookings.length;
+  document.getElementById('stat-bookings').textContent = bookings.filter(b => b.status !== 'cancelled').length;
   renderCalendar();
   updateCalStats();
 
   const now = new Date();
-  const upcoming = [...bookings].filter(b => new Date(b.checkin) >= now).sort((a,b) => new Date(a.checkin)-new Date(b.checkin));
+  const upcoming = [...bookings].filter(b => b.status !== 'cancelled' && new Date(b.checkin) >= now).sort((a,b) => new Date(a.checkin)-new Date(b.checkin));
   const nc = document.getElementById('next-checkin-content');
   if (upcoming.length > 0) {
     const b = upcoming[0];
@@ -1897,14 +2159,14 @@ function calNext() { calMonth++; if (calMonth>11){calMonth=0;calYear++;} renderC
 function updateCalStats() {
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   let bookedDays = 0;
-  bookings.forEach(b => {
+  bookings.filter(b => b.status !== 'cancelled').forEach(b => {
     const ci = new Date(b.checkin), co = new Date(b.checkout);
     for (let d = new Date(ci); d < co; d.setDate(d.getDate()+1))
       if (d.getMonth()===calMonth && d.getFullYear()===calYear) bookedDays++;
   });
   const monthRev = bookings.filter(b => {
     const d = new Date(b.checkin);
-    return d.getMonth()===calMonth && d.getFullYear()===calYear;
+    return b.status !== 'cancelled' && d.getMonth()===calMonth && d.getFullYear()===calYear;
   }).reduce((s,b) => s+Number(b.hostPayout||0), 0);
   const occ = Math.round((bookedDays/daysInMonth)*100);
   document.getElementById('stat-occupancy').textContent = occ + '%';
@@ -1919,7 +2181,7 @@ function renderCalendar() {
 
   // Tag each day: start = checkin, end = checkout, mid = in between
   const starts = new Set(), ends = new Set(), mids = new Set();
-  bookings.forEach(b => {
+  bookings.filter(b => b.status !== 'cancelled').forEach(b => {
     if (!b.checkin || !b.checkout) return;
     const ci = new Date(b.checkin), co = new Date(b.checkout);
     for (let d = new Date(ci); d <= co; d.setDate(d.getDate() + 1)) {
@@ -1955,10 +2217,11 @@ function renderBookings(filter) {
   if (filter) bookingFilter = filter;
   const list = document.getElementById('bookings-list');
   let filtered;
-  if (bookingFilter==='all') filtered = bookings;
-  else if (bookingFilter==='upcoming') filtered = bookings.filter(b=>new Date(b.checkout)>=new Date());
-  else if (bookingFilter==='completed') filtered = bookings.filter(b=>new Date(b.checkout)<new Date());
-  else filtered = bookings.filter(b=>new Date(b.checkout)>=new Date());
+  if (bookingFilter==='all')       filtered = bookings.filter(b => b.status !== 'cancelled');
+  else if (bookingFilter==='upcoming')  filtered = bookings.filter(b => b.status !== 'cancelled' && new Date(b.checkout)>=new Date());
+  else if (bookingFilter==='completed') filtered = bookings.filter(b => b.status !== 'cancelled' && new Date(b.checkout)<new Date());
+  else if (bookingFilter==='cancelled') filtered = bookings.filter(b => b.status === 'cancelled');
+  else filtered = bookings.filter(b => b.status !== 'cancelled' && new Date(b.checkout)>=new Date());
   if (!filtered.length) {
     const hasAny = bookings.length > 0;
     list.innerHTML = `<div class="card" style="text-align:center;padding:32px 16px">
@@ -1969,22 +2232,29 @@ function renderBookings(filter) {
     return;
   }
   const sorted = [...filtered].sort((a,b)=>new Date(a.checkin)-new Date(b.checkin));
-  list.innerHTML = sorted.map(b=>`
-    <div class="card" onclick="showDetail(${b.id})" style="cursor:pointer" data-booking-id="${b.id}">
+  list.innerHTML = sorted.map(b => {
+    const isCancelled = b.status === 'cancelled';
+    const isHosting = !isCancelled && new Date(b.checkin)<=new Date() && new Date(b.checkout)>=new Date();
+    const isPast = !isCancelled && new Date(b.checkout)<new Date();
+    const statusClass = isCancelled ? 'status-cancelled' : isHosting ? 'status-upcoming' : isPast ? 'status-completed' : 'status-upcoming';
+    const statusLabel = isCancelled ? '✕ Cancelled' : isHosting ? '🏡 Hosting' : isPast ? 'Past' : 'Upcoming';
+    return `
+    <div class="card" onclick="showDetail(${b.id})" style="cursor:pointer${isCancelled?';opacity:0.6':''}" data-booking-id="${b.id}">
       <div class="booking-item" style="border:none;padding:0" data-booking-id="${b.id}">
         ${platformIcon(b.platform, 42)}
         <div class="booking-info">
-          <div class="booking-name">${b.name}</div>
-          <div class="booking-dates">${fmt(b.checkin)} → ${fmt(b.checkout)}</div>
-          <div class="booking-guests">${b.guests} guests · ${b.nights} night${b.nights!==1?'s':''}</div>
+          <div class="booking-name">${escHtml(b.name)}</div>
+          <div class="booking-dates">${escHtml(fmt(b.checkin))} → ${escHtml(fmt(b.checkout))}</div>
+          <div class="booking-guests">${escHtml(b.guests)} guests · ${escHtml(b.nights)} night${b.nights!==1?'s':''}</div>
         </div>
         <div class="booking-right">
-          <div class="booking-amount">$${Number(b.hostPayout||0).toLocaleString()}</div>
-          <div class="booking-status ${new Date(b.checkin)<=new Date()&&new Date(b.checkout)>=new Date()?'status-upcoming':new Date(b.checkout)<new Date()?'status-completed':'status-upcoming'}">${new Date(b.checkin)<=new Date()&&new Date(b.checkout)>=new Date()?'🏡 Hosting':new Date(b.checkout)<new Date()?'Past':'Upcoming'}</div>
-          ${b.cleanerConfirmed?'<div style="font-size:10px;color:var(--moss);margin-top:2px">🧹 ✓</div>':`<div style="font-size:10px;color:var(--amber);margin-top:2px">🧹 Pending</div>`}
+          <div class="booking-amount" style="${isCancelled?'text-decoration:line-through;color:var(--text-soft)':''}">$${Number(b.hostPayout||0).toLocaleString()}</div>
+          <div class="booking-status ${statusClass}">${statusLabel}</div>
+          ${!isCancelled ? (b.cleanerConfirmed?'<div style="font-size:10px;color:var(--moss);margin-top:2px">🧹 ✓</div>':'<div style="font-size:10px;color:var(--amber);margin-top:2px">🧹 Pending</div>') : ''}
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   animateList('#bookings-list');
   setTimeout(attachLongPress, 60);
 }
@@ -1997,105 +2267,135 @@ function filterCleans(f, btn) {
 function renderCleaning() {
   const list = document.getElementById('cleaning-list');
   const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
 
-  // Unbooked = future bookings with no clean record AND not cleaner confirmed
-  if (cleanFilter === 'unbooked') {
-    const unbooked = bookings.filter(b => {
-      const isFuture = new Date(b.checkout) >= now;
-      const hasClean = cleans.some(c => c.guestName === b.name || c.bookingId === b.id);
-      const isConfirmed = b.cleanerConfirmed || cleans.some(c => (c.guestName === b.name || c.bookingId === b.id) && c.cleanerConfirmed);
-      return isFuture && !hasClean && !isConfirmed;
-    });
-    if (!unbooked.length) {
-      list.innerHTML = '<div style="color:var(--text-soft);font-size:13px;">All future bookings have a cleaner assigned.</div>';
+  function cleanCard(c, b, extra) {
+    const days = Math.ceil((new Date(c.date) - now) / 86400000);
+    const urgClass = days <= 0 ? 'urgent' : days <= 2 ? 'soon' : 'ok';
+    const urgText = days < 0 ? 'Overdue' : days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days}d`;
+    const statusBadge = c.done
+      ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✅ Done</span>'
+      : c.cleanerDeclined
+      ? '<span style="font-size:11px;font-weight:600;color:var(--red);background:#FDECEA;padding:3px 9px;border-radius:20px">❌ Declined</span>'
+      : c.cleanerConfirmed
+      ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✓ Accepted</span>'
+      : '<span style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:3px 9px;border-radius:20px">⏳ Pending</span>';
+    return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:14px">${escHtml(b ? b.name : (c.guestName || '—'))}</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-top:2px">🧹 ${escHtml(c.cleaner || '—')} · ${escHtml(fmt(c.date))}</div>
+          ${b ? `<div style="font-size:12px;color:var(--text-soft)">Checkout: ${escHtml(fmt(b.checkout))}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+          <div class="clean-urgency ${urgClass}">${urgText}</div>
+          ${statusBadge}
+        </div>
+      </div>
+      ${extra || ''}
+    </div>`;
+  }
+
+  // ── UPCOMING: all future assigned cleans ──────────────────────────────────
+  if (cleanFilter === 'upcoming') {
+    const upcoming = cleans
+      .filter(c => !c.done && !c.cleanerDeclined && c.date >= todayStr)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (!upcoming.length) {
+      list.innerHTML = '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">🧹</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No upcoming cleans</div><div style="font-size:12px;color:var(--text-soft)">Assign a cleaner to a booking to get started</div></div>';
       return;
     }
-    list.innerHTML = [...unbooked].sort((a,b)=>new Date(a.checkout)-new Date(b.checkout)).map(b => {
-      const days = Math.ceil((new Date(b.checkout) - now) / 86400000);
-      const urgClass = days <= 3 ? 'urgent' : days <= 7 ? 'soon' : 'ok';
-      return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-weight:600;font-size:14px">${b.name||''}</div>
-            <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${fmt(b.checkout)} · ${b.guests||0} guests</div>
-          </div>
-          <div class="clean-urgency ${urgClass}">No cleaner</div>
-        </div>
+    list.innerHTML = upcoming.map(c => {
+      const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+      const extra = `<div style="display:flex;gap:8px">
+        <button onclick="openNotifyModal(${c.id})" style="flex:1;background:var(--forest-light);color:var(--sage);border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">💬 SMS</button>
+        <button onclick="reassignClean(${c.id})" style="flex:1;background:var(--mist);color:var(--text);border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">↺ Reassign</button>
       </div>`;
+      return cleanCard(c, b, extra);
     }).join('');
     return;
   }
 
-  // Confirmed = future bookings where cleanerConfirmed is true
-  if (cleanFilter === 'confirmed') {
-    const confirmed = bookings.filter(b => b.cleanerConfirmed && new Date(b.checkout) >= now);
-    if (!confirmed.length) { list.innerHTML='<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">🧹</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No confirmed cleans yet</div><div style="font-size:12px;color:var(--text-soft)">Cleans appear here once a cleaner confirms</div></div>'; return; }
-    list.innerHTML = [...confirmed].sort((a,b)=>new Date(a.checkin)-new Date(b.checkin)).map(b => {
-      const clean = cleans.find(c => c.guestName === b.name || c.bookingId === b.id);
-      const cleanDate = clean ? fmt(clean.date) : fmt(b.checkout);
-      const cleanerName = clean ? clean.cleaner : '—';
-      const days = Math.ceil((new Date(b.checkout)-now)/86400000);
-      const urgClass = days < 0 ? 'ok' : days <= 1 ? 'urgent' : days <= 3 ? 'soon' : 'ok';
-      const urgText = days < 0 ? 'Past' : days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days}d`;
-      return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-weight:600;font-size:14px">${b.name}</div>
-            <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Cleaner: ${cleanerName} · ${cleanDate}</div>
+  // ── ACTION: declined + unassigned bookings ────────────────────────────────
+  if (cleanFilter === 'action') {
+    const declined = cleans.filter(c => c.cleanerDeclined);
+    const unassigned = bookings.filter(b => {
+      const isFuture = new Date(b.checkout) >= now;
+      const hasClean = cleans.some(c => c.bookingId === b.id || c.guestName === b.name);
+      return isFuture && !hasClean;
+    }).sort((a, b) => new Date(a.checkout) - new Date(b.checkout));
+
+    if (!declined.length && !unassigned.length) {
+      list.innerHTML = '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">All good!</div><div style="font-size:12px;color:var(--text-soft)">No action needed</div></div>';
+      return;
+    }
+
+    let html = '';
+    if (declined.length) {
+      html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--red);margin-bottom:4px">❌ Declined — needs reassigning</div>`;
+      html += declined.sort((a,b) => a.date.localeCompare(b.date)).map(c => {
+        const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+        const extra = `<button onclick="reassignClean(${c.id})" style="width:100%;background:var(--forest);color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">↺ Reassign Cleaner</button>`;
+        return cleanCard(c, b, extra);
+      }).join('');
+    }
+    if (unassigned.length) {
+      html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--amber);margin-top:${declined.length?'16px':'0'};margin-bottom:4px">⚠️ No cleaner assigned</div>`;
+      html += unassigned.map(b => {
+        const days = Math.ceil((new Date(b.checkout) - now) / 86400000);
+        const urgClass = days <= 3 ? 'urgent' : days <= 7 ? 'soon' : 'ok';
+        return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-weight:600;font-size:14px">${escHtml(b.name || '')}</div>
+              <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${escHtml(fmt(b.checkout))} · ${escHtml(b.guests || 0)} guests</div>
+            </div>
+            <div class="clean-urgency ${urgClass}">No cleaner</div>
           </div>
-          <div class="clean-urgency ${urgClass}">${urgText}</div>
-        </div>
-      </div>`;
-    }).join('');
+        </div>`;
+      }).join('');
+    }
+    list.innerHTML = html;
     return;
   }
 
-  const filtered = cleans.filter(c => {
-    const isFuture = new Date(c.date) >= now;
-    if (cleanFilter === 'notified') return c.notified && !c.cleanerConfirmed && !c.cleanerDeclined && isFuture;
-    if (cleanFilter === 'declined') return c.cleanerDeclined === true;
-    return false;
-  });
-  const emptyMsg = {
-    notified: '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">💬</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No pending notifications</div><div style="font-size:12px;color:var(--text-soft)">Cleans waiting for cleaner confirmation appear here</div></div>',
-    declined: '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No declined cleans</div><div style="font-size:12px;color:var(--text-soft)">Cleans that a cleaner has declined appear here</div></div>',
-    past: '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">✅</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No past cleans</div><div style="font-size:12px;color:var(--text-soft)">Completed cleans will show here</div></div>',
-  }[cleanFilter] || '';
-  if (!filtered.length) { list.innerHTML=`<div style="color:var(--text-soft);font-size:13px;">${emptyMsg}</div>`; return; }
-  list.innerHTML = [...filtered].sort((a,b)=>new Date(a.date)-new Date(b.date)).map(c=>{
-    const days = Math.ceil((new Date(c.date)-now)/86400000);
-    const urgClass = days<=1?'urgent':days<=3?'soon':'ok';
-    const urgText = days<=0?'Today!':days===1?'Tomorrow':`In ${days}d`;
-    return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-        <div>
-          <div style="font-weight:600;font-size:14px">${c.guestName||''}</div>
-          <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Cleaner: ${c.cleaner||''} · ${fmt(c.date)}</div>
-        </div>
-        <div class="clean-urgency ${urgClass}">${urgText}</div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="markCleanerConfirmed(${c.id})" style="flex:1;background:var(--moss);color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">✓ Cleaner Confirmed</button>
-        <button onclick="openNotifyModal(${c.id})" style="flex:1;background:var(--forest-light);color:var(--sage);border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">💬 Resend SMS</button>
-      </div>
-    </div>`;
-  }).join('');
+  // ── DONE: completed cleans ────────────────────────────────────────────────
+  if (cleanFilter === 'done') {
+    const done = cleans
+      .filter(c => c.done)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    if (!done.length) {
+      list.innerHTML = '<div style="text-align:center;padding:28px 16px"><div style="font-size:36px;margin-bottom:10px">🧹</div><div style="font-weight:600;font-size:14px;margin-bottom:4px">No completed cleans yet</div></div>';
+      return;
+    }
+    list.innerHTML = done.map(c => {
+      const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+      return cleanCard(c, b, '');
+    }).join('');
+    return;
+  }
+}
+
+function reassignClean(cleanId) {
+  const c = cleans.find(cl => cl.id === cleanId);
+  if (!c) return;
+  // Reset the clean so it can be reassigned from the booking detail
+  const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+  if (b) {
+    showDetail(b.id);
+  } else {
+    showBanner('⚠ Booking not found — delete and reassign manually', 'warn');
+  }
 }
 
 function markCleanerConfirmed(id) {
   const c = cleans.find(c => c.id === id);
   if (c) {
     c.cleanerConfirmed = true;
-    // Match booking by name (IDs can change on sync)
-    const b = bookings.find(b => b.name === c.guestName);
-    if (b) {
-      b.cleanerConfirmed = true;
-      pushToSheet('update', b);
-    }
     save();
+    pushAppData('cleans', cleans);
     showBanner('✅ Cleaner confirmed', 'ok');
-    // Switch to confirmed tab
-    cleanFilter = 'confirmed';
+    cleanFilter = 'upcoming';
     document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
     renderCleaning();
     renderBookings();
@@ -2133,7 +2433,7 @@ function renderReport() {
 
   // Helper: bookings in a given month
   function monthBookings(year, month) {
-    return bookings.filter(b => { const d = new Date(b.checkin); return d.getFullYear()===year && d.getMonth()===month; });
+    return bookings.filter(b => b.status !== 'cancelled' && (function(){ const d = new Date(b.checkin); return d.getFullYear()===year && d.getMonth()===month; })());
   }
   // Helper: expenses in FY — use live array, not stale localStorage read
   function fyExpenses() {
@@ -2300,9 +2600,8 @@ function renderRevenue() {
   document.getElementById('rev-month-title').textContent = months[revMonth] + ' ' + revYear;
   const monthBookings = bookings.filter(b => {
     const d = new Date(b.checkin);
-    return d.getMonth()===revMonth && d.getFullYear()===revYear;
+    return b.status !== 'cancelled' && d.getMonth()===revMonth && d.getFullYear()===revYear;
   });
-  const totalHost = monthBookings.reduce((s,b)=>s+Number(b.hostPayout||0),0);
   const totalCleaning = monthBookings.reduce((s,b)=>s+Number(b.cleaningFee||0),0);
   const totalMgmt = monthBookings.reduce((s,b)=>s+Number(b.mgmtFee||0),0);
   // Net = (hostPayout - cleaningFee) * mgmtFee% — but mgmtFee is already the dollar amount
@@ -2334,9 +2633,8 @@ function renderManagement() {
   document.getElementById('mgmt-month-title').textContent = monthNames[mgmtMonth] + ' ' + mgmtYear;
   const monthBookings = bookings.filter(b => {
     const d = new Date(b.checkin);
-    return d.getMonth()===mgmtMonth && d.getFullYear()===mgmtYear;
+    return b.status !== 'cancelled' && d.getMonth()===mgmtMonth && d.getFullYear()===mgmtYear;
   });
-  const totalMgmtPayout = monthBookings.reduce((s,b)=>s+Number(b.mgmtPayout||0),0);
   document.getElementById('total-mgmt').textContent = '$' + totalMgmtPayout.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('mgmt-sub').textContent = monthBookings.length + ' booking' + (monthBookings.length!==1?'s':'');
   document.getElementById('mgmt-breakdown').innerHTML = monthBookings.length ? [...monthBookings].sort((a,b)=>new Date(a.checkin)-new Date(b.checkin)).map(b=>{
@@ -2523,72 +2821,109 @@ function renderNotes() {
 function openSettingsCat(cat) {
   document.getElementById('settings-menu').style.display = 'none';
   document.querySelectorAll('[id^="settings-cat-"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('[id^="settings-panel-"]').forEach(el => el.style.display = 'none');
   const el = document.getElementById('settings-cat-' + cat);
   if (el) el.style.display = 'block';
-
   if (cat === 'property') {
-    const defaultTemplate = `Hi {cleanerFirstName}\n\nNew Booking - please see below\n\nCheck in: {checkin}\nCheck out: {checkout}\nName: {guestFirstName}\nNumber of guests: {guests}\n\nPlease let me know if you are available`;
-    document.getElementById('settings-sms-template').value = localStorage.getItem('gh-sms-template') || defaultTemplate;
-    renderCleanersList();
-    populateCleanerSelect();
+    // update notification status row
     setTimeout(updateNotifStatus, 100);
+    const sr = document.getElementById('notif-status-row-menu');
+    if (sr) { const p = Notification.permission; sr.textContent = p === 'granted' ? '✅ Enabled' : p === 'denied' ? '❌ Blocked' : 'Tap to set up'; }
   }
   if (cat === 'google') {
-    const scriptUrlEl = document.getElementById('settings-script-url');
-    if (scriptUrlEl) scriptUrlEl.value = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
-    const gdriveEl = document.getElementById('gdrive-client-id');
-    if (gdriveEl) gdriveEl.value = localStorage.getItem('gh-gdrive-client-id') || '';
-    // Update Drive status row label
     const token = localStorage.getItem('gh-drive-token');
     const statusRow = document.getElementById('gdrive-status-row');
     if (statusRow) statusRow.textContent = token ? '✓ Connected' : 'Tap to connect';
-    const statusEl = document.getElementById('gdrive-status');
-    if (statusEl) verifyDriveToken();
-    const lastBackup = localStorage.getItem('gh-last-backup') || 'Never';
-    const backupEl = document.getElementById('backup-last-time');
-    if (backupEl) backupEl.textContent = lastBackup;
   }
-  if (cat === 'aitools') {
-    const apiKeyEl = document.getElementById('settings-api-key');
-    if (apiKeyEl) apiKeyEl.value = localStorage.getItem('gh-api-key') || '';
-    const gemEl = document.getElementById('settings-gemini-key');
-    if (gemEl) gemEl.value = localStorage.getItem('gh-gemini-key') || '';
-    const saved = localStorage.getItem('gh-base-rate');
-    if (saved) { const el = document.getElementById('pricing-base-rate'); if (el) el.value = saved; }
-    renderAIIgnoreList();
+  if (cat === 'cleaner') { openCleanerSettings(); }
+}
+
+function openSettingsPanel(panelId) {
+  // track which cat we came from
+  const activeCat = document.querySelector('[id^="settings-cat-"]:not([style*="display: none"]):not([style*="display:none"])');
+  const prevCat = activeCat ? activeCat.id.replace('settings-cat-', '') : null;
+  document.getElementById('settings-menu').style.display = 'none';
+  document.querySelectorAll('[id^="settings-cat-"]').forEach(el => el.style.display = 'none');
+  document.querySelectorAll('[id^="settings-panel-"]').forEach(el => el.style.display = 'none');
+  const panel = document.getElementById('settings-panel-' + panelId);
+  if (!panel) return;
+  panel.style.display = 'block';
+  if (prevCat) panel.dataset.prevCat = prevCat;
+  else delete panel.dataset.prevCat;
+
+  // populate panel data on open
+  if (panelId === 'sms-template') {
+    const defaultTemplate = `Hi {cleanerFirstName}\n\nNew Booking - please see below\n\nCheck in: {checkin}\nCheck out: {checkout}\nName: {guestFirstName}\nNumber of guests: {guests}\n\nPlease let me know if you are available`;
+    const el = document.getElementById('settings-sms-template');
+    if (el) el.value = localStorage.getItem('gh-sms-template') || defaultTemplate;
   }
-  if (cat === 'expenses') {
+  if (panelId === 'team') {
+    renderTeamList();
+  }
+  if (panelId === 'notifications') {
+    setTimeout(updateNotifStatus, 100);
+  }
+  if (panelId === 'expense-cats') {
     renderExpenseCatSettings();
+  }
+  if (panelId === 'invoice-details') {
     ['name','company','abn','acn','email','address'].forEach(k => {
       const el = document.getElementById('inv-'+k);
       if (el) el.value = localStorage.getItem('gh-inv-'+k) || '';
     });
+  }
+  if (panelId === 'bank-details') {
     ['name','bsb','acc','bank'].forEach(k => {
       const el = document.getElementById('inv-bank-'+k);
       if (el) el.value = localStorage.getItem('gh-inv-bank-'+k) || '';
     });
+  }
+  if (panelId === 'invoice-clients') {
     renderClientsList();
   }
-  if (cat === 'storage') renderStorageViewer();
-  if (cat === 'cleaner') { openCleanerSettings(); }
+  if (panelId === 'sheets') {
+    const el = document.getElementById('settings-script-url');
+    if (el) el.value = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+  }
+  if (panelId === 'apps-script') {
+    const el = document.getElementById('settings-script-url');
+    if (el) el.value = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+  }
+  if (panelId === 'drive') {
+    const el = document.getElementById('gdrive-client-id');
+    if (el) el.value = localStorage.getItem('gh-gdrive-client-id') || '';
+    const statusEl = document.getElementById('gdrive-status');
+    if (statusEl) verifyDriveToken();
+  }
+  if (panelId === 'backup') {
+    const el = document.getElementById('backup-last-time');
+    if (el) el.textContent = localStorage.getItem('gh-last-backup') || 'Never';
+  }
+  if (panelId === 'ai-import') {
+    const el = document.getElementById('settings-api-key');
+    if (el) el.value = localStorage.getItem('gh-api-key') || '';
+  }
+  if (panelId === 'smart-pricing') {
+    const saved = localStorage.getItem('gh-base-rate');
+    if (saved) { const el = document.getElementById('pricing-base-rate'); if (el) el.value = saved; }
+  }
+  if (panelId === 'ai-ignore') {
+    renderAIIgnoreList();
+  }
+  if (panelId === 'app-data') {
+    renderStorageViewer();
+  }
+  if (panelId === 'feel') {
+    loadFxSettings();
+  }
 }
 
-// Third-level settings panel navigation
-function openSettingsPanel(panelId) {
-  const cat = document.querySelector('[id^="settings-cat-"]:not([style*="display: none"]):not([style*="display:none"])');
-  if (cat) cat.dataset.prevCat = cat.id.replace('settings-cat-', '');
-  document.querySelectorAll('[id^="settings-cat-"]').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('[id^="settings-panel-"]').forEach(el => el.style.display = 'none');
-  const panel = document.getElementById('settings-panel-' + panelId);
-  if (panel) panel.style.display = 'block';
-}
 function closeSettingsPanel() {
+  const panel = document.querySelector('[id^="settings-panel-"]:not([style*="display: none"]):not([style*="display:none"])');
+  const returnCat = panel?.dataset.prevCat;
   document.querySelectorAll('[id^="settings-panel-"]').forEach(el => el.style.display = 'none');
-  // Find which cat to return to
-  const allCats = document.querySelectorAll('[id^="settings-cat-"]');
-  let returnCat = 'google';
-  allCats.forEach(el => { if (el.dataset.prevCat) returnCat = el.dataset.prevCat; });
-  openSettingsCat(returnCat);
+  if (returnCat) openSettingsCat(returnCat);
+  else closeSettingsCat(); // goes back to main menu
 }
 
 function closeSettingsCat() {
@@ -2646,17 +2981,10 @@ async function resetExpenseCats() {
 
 // ── SMART PRICING ─────────────────────────────────────────────────────────
 async function getSmartPricing() {
-  const apiKey = getApiKey();
   const status = document.getElementById('pricing-status');
   const result = document.getElementById('pricing-result');
   status.style.display = 'block';
   result.innerHTML = '';
-
-  if (!apiKey) {
-    status.style.background = '#FFF8E1'; status.style.color = '#E65100';
-    status.textContent = '⚠ Add your Anthropic API key in Settings → AI Tools first';
-    return;
-  }
 
   const period = document.getElementById('pricing-period').value;
   const baseRate = document.getElementById('pricing-base-rate').value;
@@ -2666,11 +2994,11 @@ async function getSmartPricing() {
   status.textContent = '⟳ Analysing your bookings and seasonal data...';
 
   const now = new Date();
-  const history = bookings.map(b => ({
+  const history = bookings.filter(b => b.status !== 'cancelled').map(b => ({
     checkin: b.checkin, checkout: b.checkout, nights: b.nights,
     guests: b.guests, payout: b.hostPayout, platform: b.platform
   }));
-  const totalRevenue = bookings.reduce((s,b) => s + (b.hostPayout||0), 0);
+  const totalRevenue = bookings.filter(b => b.status !== 'cancelled').reduce((s,b) => s + (b.hostPayout||0), 0);
   const avgPayout = history.length ? Math.round(totalRevenue / history.length) : 0;
 
   // Build date range — either next N days or a specific calendar month
@@ -2734,14 +3062,9 @@ dates: array of specific YYYY-MM-DD for exact holidays/events, optional
 List 8-12 periods. Higher rates on Fri/Sat than Sun. Peak Jan 1, Easter, June festival weeks, school holidays, long weekends.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4000,
@@ -2926,11 +3249,14 @@ function renderPricingCalendar(data, bookedDates, startDate, endDate) {
 }
 function renderSettings() {
   const lastSync = localStorage.getItem('gh-last-sync') || 'Never';
-  document.getElementById('settings-last-sync').textContent = lastSync;
-  document.getElementById('settings-booking-count').textContent = bookings.length + ' bookings loaded';
+  const lsEl = document.getElementById('settings-last-sync');
+  if (lsEl) lsEl.textContent = lastSync;
+  const bcEl = document.getElementById('settings-booking-count');
+  if (bcEl) bcEl.textContent = bookings.length + ' bookings loaded';
   const lastBackup = localStorage.getItem('gh-last-backup') || 'Never';
-  const el = document.getElementById('backup-last-time');
-  if (el) el.textContent = lastBackup;
+  const buEl = document.getElementById('backup-last-time');
+  if (buEl) buEl.textContent = lastBackup;
+  setTimeout(updateNotifStatus, 100);
 }
 
 function populateSelects() {
@@ -3183,12 +3509,12 @@ function addClean() {
       if (ok) {
         newClean.notified = true;
         save();
-        cleanFilter = 'notified';
-        document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===1));
+        cleanFilter = 'upcoming';
+        document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
         renderCleaning();
         openNotifyModal(newClean.id);
       } else {
-        cleanFilter = 'confirmed';
+        cleanFilter = 'upcoming';
         document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
         renderCleaning();
       }
@@ -3200,11 +3526,11 @@ function toggleClean(id) {
   if (c){
     c.done=!c.done;
     save();
-    // If marking done, show past tab
+    // If marking done, switch to Done tab
     if (c.done) {
-      cleanFilter='past';
+      cleanFilter='done';
       document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i)=>{
-        t.classList.toggle('active', i===1);
+        t.classList.toggle('active', i===2);
       });
     }
     renderCleaning(); renderDashboard();
@@ -3422,9 +3748,9 @@ function sendSMS() {
     if (c) { c.notified = true; c.cleanerConfirmed = false; save(); }
   }
   closeNotifyModal();
-  // Switch to notified tab
-  cleanFilter = 'notified';
-  document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===1));
+  // Switch to upcoming tab
+  cleanFilter = 'upcoming';
+  document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i) => t.classList.toggle('active', i===0));
   renderCleaning();
   populateSelects();
 }
@@ -3694,44 +4020,125 @@ function saveCleaners(list) {
 function addCleaner() {
   const name = document.getElementById('new-cleaner-name').value.trim();
   const phone = document.getElementById('new-cleaner-phone').value.trim();
+  const email = document.getElementById('new-cleaner-email').value.trim();
+  const pin = document.getElementById('new-cleaner-pin').value.trim();
   const roleEl = document.getElementById('new-cleaner-role');
   const role = roleEl ? roleEl.value : 'Cleaner';
   if (!name) { showBanner('⚠ Please enter a name','warn'); return; }
+  if (pin && !/^\d{4}$/.test(pin)) { showBanner('⚠ PIN must be exactly 4 digits','warn'); return; }
   const people = loadCleaners();
-  people.push({ id: Date.now(), name, phone, role });
+  people.push({ id: Date.now(), name, phone, email: email || '', pin: pin || '', role });
   saveCleaners(people);
   document.getElementById('new-cleaner-name').value = '';
   document.getElementById('new-cleaner-phone').value = '';
-  renderCleanersList();
+  document.getElementById('new-cleaner-email').value = '';
+  document.getElementById('new-cleaner-pin').value = '';
   populateCleanerSelect();
   populateContractorSelect();
+  showBanner('✓ ' + name + ' added', 'ok');
+  // Go back to team list
+  openSettingsPanel('team');
 }
 function deleteCleaner(id) {
   saveCleaners(loadCleaners().filter(c => c.id !== id));
-  renderCleanersList();
+  renderTeamList();
   populateCleanerSelect();
   populateContractorSelect();
 }
 function renderCleanersList() {
-  const people = loadCleaners();
-  const el = document.getElementById('cleaners-list');
+  // Legacy — now handled by renderTeamList
+  renderTeamList();
+}
+function renderTeamList() {
+  const el = document.getElementById('team-list-container');
   if (!el) return;
-  if (!people.length) { el.innerHTML = '<div style="color:var(--text-soft);font-size:13px;margin-bottom:8px">No people added yet.</div>'; return; }
+  const people = loadCleaners();
+  // Update subtitle on property cat
+  const countRow = document.getElementById('team-count-row');
+  if (countRow) countRow.textContent = people.length ? people.length + ' people' : 'Cleaners & contractors';
+  if (!people.length) { el.innerHTML = ''; return; }
   const roleColors = {Cleaner:'var(--moss)',Plumber:'#1565C0',Electrician:'#E65100',Landscaper:'#2E7D32',Builder:'#6A1B9A',Handyman:'#00838F',Other:'var(--stone)'};
-  el.innerHTML = people.map(c => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--warm)">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:8px;height:8px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'}"></div>
+  el.innerHTML = `<div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:12px">` +
+    people.map((c, i) => `
+    <div class="settings-cat-item" onclick="openCleanerProfile(${c.id})" ${i===people.length-1?'style="border-bottom:none"':''}>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'};color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
         <div>
-          <div style="font-weight:600;font-size:14px">${c.name} <span style="font-size:11px;color:var(--text-soft);font-weight:400">${c.role||'Cleaner'}</span></div>
-          <div style="font-size:12px;color:var(--text-soft)">${c.phone || 'No number'}</div>
+          <div style="font-weight:500;font-size:14px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}${c.email?' · '+c.email:c.phone?' · '+c.phone:''}</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        ${c.phone?`<a href="tel:${c.phone}" style="width:32px;height:32px;border-radius:50%;background:var(--moss);color:white;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none">📞</a>`:''}
-        <button onclick="deleteCleaner(${c.id})" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer">✕</button>
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>`).join('') + `</div>`;
+}
+function openCleanerProfile(id) {
+  const c = loadCleaners().find(x => x.id === id);
+  if (!c) return;
+  const PERM_LABELS = [
+    { key: 'firstName',  label: 'Guest first name' },
+    { key: 'fullName',   label: 'Full guest name' },
+    { key: 'guests',     label: 'Number of guests' },
+    { key: 'notes',      label: 'Check-in notes' },
+    { key: 'payout',     label: 'Cleaning fee / payout' },
+  ];
+  const perm = c.permissions || {};
+  const link = cleanerLinkForId(c);
+  const roleColors = {Cleaner:'var(--moss)',Plumber:'#1565C0',Electrician:'#E65100',Landscaper:'#2E7D32',Builder:'#6A1B9A',Handyman:'#00838F',Other:'var(--stone)'};
+  document.getElementById('cleaner-profile-content').innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:48px;height:48px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'};color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:17px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}</div>
+        </div>
+        <button onclick="deleteCleaner(${c.id})" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 8px">Remove</button>
       </div>
-    </div>`).join('');
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">Contact</div>
+      <label>Mobile</label>
+      <input type="tel" id="cp-phone-${c.id}" value="${c.phone||''}" placeholder="e.g. 0412 345 678">
+      <label>Email</label>
+      <input type="email" id="cp-email-${c.id}" value="${c.email||''}" placeholder="e.g. ${c.name.toLowerCase()}@email.com">
+      <button class="btn-secondary" onclick="saveCleanerContact(${c.id})" style="margin-top:4px">Save Contact</button>
+      <div id="cp-contact-confirm-${c.id}" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">🔐 App Access</div>
+      <label>PIN (4 digits)</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="font-size:24px;font-weight:700;color:var(--forest);letter-spacing:8px;flex:1">${c.pin||'—'}</div>
+        ${c.pin?`<button onclick="clearCleanerPinById(${c.id})" style="font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:20px;padding:4px 10px;cursor:pointer;white-space:nowrap">Clear</button>`:''}
+      </div>
+      <input type="text" inputmode="numeric" pattern="\\d*" id="pin-input-${c.id}" placeholder="Set 4-digit PIN" maxlength="4"
+        style="font-size:20px;letter-spacing:8px;text-align:center;padding:12px;border:1.5px solid var(--stone);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;background:white;margin-bottom:8px;color:var(--text);width:100%"
+        oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)">
+      <button onclick="saveCleanerPinById(${c.id})" class="btn-primary" style="width:100%">Save PIN</button>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-top:14px;margin-bottom:8px">🔗 App Link</div>
+      <div style="background:var(--mist);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--forest);font-weight:500;word-break:break-all;margin-bottom:8px;border:1px solid var(--warm)">${link}</div>
+      <button onclick="copyCleanerLinkById(${c.id})" class="btn-primary" style="width:100%">📋 Copy Link</button>
+    </div>
+    <div class="card">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">👁 What They Can See</div>
+      ${PERM_LABELS.map(p => `
+      <div class="ios-toggle-row" style="padding:6px 0">
+        <div class="ios-toggle-label" style="font-size:13px">${p.label}</div>
+        <label class="ios-toggle"><input type="checkbox" ${perm[p.key]?'checked':''} onchange="saveCleanerPerm(${c.id},'${p.key}',this.checked)"><div class="ios-toggle-track"></div><div class="ios-toggle-thumb"></div></label>
+      </div>`).join('')}
+    </div>`;
+  openSettingsPanel('cleaner-profile');
+}
+function saveCleanerContact(id) {
+  const list = loadCleaners();
+  const c = list.find(x => x.id === id);
+  if (!c) return;
+  const phoneEl = document.getElementById('cp-phone-' + id);
+  const emailEl = document.getElementById('cp-email-' + id);
+  if (phoneEl) c.phone = phoneEl.value.trim();
+  if (emailEl) c.email = emailEl.value.trim();
+  saveCleaners(list);
+  const conf = document.getElementById('cp-contact-confirm-' + id);
+  if (conf) { conf.style.display='block'; setTimeout(()=>conf.style.display='none',2000); }
+  populateCleanerSelect();
 }
 function populateCleanerSelect() {
   const cleaners = loadCleaners().filter(c => !c.role || c.role === 'Cleaner');
@@ -3869,14 +4276,7 @@ function clearExpenseFilters() {
 
 // ── AI EXPENSE ANALYSER ───────────────────────────────────────────────────
 async function analyseExpenses() {
-  const apiKey = getApiKey();
   const resultEl = document.getElementById('expense-analysis-result');
-
-  if (!apiKey) {
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = '⚠️ Add your Anthropic API key in Settings → AI Tools first.';
-    return;
-  }
 
   if (!expenses.length) {
     resultEl.style.display = 'block';
@@ -3936,14 +4336,9 @@ Return ONLY valid JSON, no markdown:
 Return empty arrays if nothing found in a category.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4000,
@@ -4099,7 +4494,7 @@ function renderExpenseAnalysis(data) {
   if (!hasAnything) html += '<div style="color:var(--forest);font-weight:600">✓ No issues found — your expenses look clean!</div>';
 
   html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-    <button onclick="openSettingsCat('aitools')"
+    <button onclick="showSection('settings');openSettingsCat('aitools');openSettingsPanel('ai-ignore')"
       style="font-size:11px;color:var(--text-soft);background:none;border:none;cursor:pointer;text-decoration:underline">View ignore list</button>
     <button onclick="document.getElementById('expense-analysis-result').style.display='none'"
       style="font-size:12px;color:var(--text-soft);background:none;border:none;cursor:pointer">✕ Close</button>
@@ -4902,26 +5297,20 @@ function clearExpensePhoto() {
 }
 
 async function extractExpenseFromReceipt() {
-  const apiKey = getApiKey();
   const status = document.getElementById('expense-extract-status');
   status.style.display = 'block';
-  if (!apiKey) {
+  if (!expensePhotoBase64) {
     status.style.background = '#FFF8E1'; status.style.color = '#E65100';
-    status.textContent = '⚠ Add API key in Settings → Screenshot Reader to enable auto-fill';
+    status.textContent = '⚠ Please attach a receipt image or PDF first';
     return;
   }
   status.style.background = '#FFF8E1'; status.style.color = '#E65100';
   status.textContent = '⟳ Reading receipt...';
   try {
     const cats = getExpenseCats();
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 500,
@@ -5630,11 +6019,6 @@ function readBookingScreenshot(input) {
 
 async function extractBookingFromScreenshot() {
   if (!screenshotBase64) { showBanner('⚠ Please select a screenshot first', 'warn'); return; }
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    showBanner('⚠ Please add your Anthropic API key in Settings first','warn'); return; //);
-    return;
-  }
   const btn = document.getElementById('screenshot-extract-btn');
   const status = document.getElementById('screenshot-status');
   btn.disabled = true;
@@ -5645,14 +6029,9 @@ async function extractBookingFromScreenshot() {
   status.textContent = '⟳ Analysing booking screenshot...';
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -5924,10 +6303,36 @@ async function pullAppData(manual = false) {
       restored.push(d.cleaners.length + ' cleaners');
     }
     if (d.cleans && Array.isArray(d.cleans) && d.cleans.length > 0) {
+      // Merge: prefer local confirmed/declined/done states over Sheet (in case Sheet is stale)
+      const localCleans = JSON.parse(localStorage.getItem('gh-cleans') || '[]');
+      const merged = d.cleans.map(sheetClean => {
+        const local = localCleans.find(lc => String(lc.id) === String(sheetClean.id));
+        if (local) {
+          // Keep the most "advanced" state
+          return Object.assign({}, sheetClean, {
+            cleanerConfirmed: local.cleanerConfirmed || sheetClean.cleanerConfirmed,
+            cleanerDeclined:  local.cleanerDeclined  || sheetClean.cleanerDeclined,
+            done:             local.done             || sheetClean.done,
+          });
+        }
+        return sheetClean;
+      });
+      // Also keep any local cleans not yet on the Sheet
+      localCleans.forEach(lc => {
+        if (!merged.find(m => String(m.id) === String(lc.id))) merged.push(lc);
+      });
       cleans.length = 0;
-      d.cleans.forEach(c => cleans.push(c));
+      merged.forEach(c => cleans.push(c));
       localStorage.setItem('gh-cleans', JSON.stringify(cleans));
-      restored.push(d.cleans.length + ' cleans');
+      // Sync booking.cleanerConfirmed from cleans
+      cleans.forEach(c => {
+        if (c.cleanerConfirmed) {
+          const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+          if (b) b.cleanerConfirmed = true;
+        }
+      });
+      localStorage.setItem('gh-bookings', JSON.stringify(bookings));
+      restored.push(merged.length + ' cleans');
     }
     if (d.notes && Array.isArray(d.notes)) {
       notes.length = 0;
@@ -6029,18 +6434,21 @@ document.addEventListener('visibilitychange', () => {
       _lastVisibilitySync = now;
       syncFromSheets(); // silent background sync
     }
+    // Always pull AppData on focus to get latest cleaner states
+    if (!isCleanerMode()) pullAppData();
   }
 });
 window.addEventListener('pageshow', (e) => { if (e.persisted) syncFromSheets(); });
 
 // Auto-refresh cleaner app when it comes back into focus or on interval
 if (isCleanerMode()) {
-  // Refresh on focus (e.g. returning from background)
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) pullAppData();
   });
-  // Also refresh every 60 seconds while open
   setInterval(() => { if (!document.hidden) pullAppData(); }, 60000);
+} else {
+  // Owner app — pull AppData every 30 seconds to catch cleaner updates
+  setInterval(() => { if (!document.hidden) pullAppData(); }, 30000);
 }
 
 // ── FEEL & GESTURES ───────────────────────────────────────────────────────────
@@ -6315,6 +6723,14 @@ function verifyCleanerPin() {
     cleanerPinEntry = ''; setTimeout(updatePinDots, 200);
   }
 }
+async function cleanerRefresh() {
+  const btn = document.getElementById('cleaner-refresh-btn');
+  if (btn) { btn.textContent = '↻ …'; btn.disabled = true; }
+  await pullAppData();
+  if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+  showBanner('✓ Updated', 'ok');
+}
+
 async function enableCleanerNotifications() {
   const { id } = getCleanerParams();
   const btn = document.getElementById('cleaner-notif-btn');
@@ -6336,11 +6752,16 @@ async function enableCleanerNotifications() {
 
 function updateCleanerNotifBtn() {
   const btn = document.getElementById('cleaner-notif-btn');
+  const status = document.getElementById('cleaner-notif-status');
   if (!btn) return;
   const { id } = getCleanerParams();
   const sub = getCleanerSub(id);
-  if (sub && window.Notification && Notification.permission === 'granted') {
-    btn.textContent = '✅ Notifications On';
+  const granted = window.Notification && Notification.permission === 'granted';
+  if (sub && granted) {
+    btn.textContent = '🔔 Notifications On';
+    if (status) status.textContent = '✅ Notifications enabled';
+  } else {
+    if (status) status.textContent = '';
   }
 }
 
@@ -6364,31 +6785,48 @@ function switchCleanerTab(tab) {
 }
 
 // ── CLEANER CLEANS VIEW ───────────────────────────────────────────────────────
+let cleanerCleanTab = 'upcoming';
+
+function switchCleanerCleanTab(tab) {
+  cleanerCleanTab = tab;
+  ['upcoming','new'].forEach(t => {
+    const btn = document.getElementById('csubtab-' + t);
+    const el = document.getElementById('cleaner-cleans-' + t);
+    if (btn) {
+      btn.style.color = t === tab ? 'var(--forest)' : 'var(--text-soft)';
+      btn.style.fontWeight = t === tab ? '700' : '600';
+      btn.style.borderBottomColor = t === tab ? 'var(--forest)' : 'transparent';
+    }
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+}
+
 function renderCleanerCleans() {
-  const el = document.getElementById('cleaner-cleans-view');
   const cleaner = getActiveCleaner();
   const today = new Date().toISOString().split('T')[0];
   const twoDaysAgo = new Date(Date.now() - 2*24*60*60*1000).toISOString().split('T')[0];
   const perm = (cleaner && cleaner.permissions) ? cleaner.permissions : {};
 
-  // Filter cleans assigned to this cleaner (by id or name fallback)
   const relevant = cleans.filter(c => {
+    if (c.done) return false;
     if (c.date < twoDaysAgo) return false;
     if (cleaner) {
       return (c.cleanerId && String(c.cleanerId) === String(cleaner.id)) ||
              (!c.cleanerId && c.cleaner && c.cleaner === cleaner.name);
     }
-    return true; // fallback: show all if no cleaner found
+    return true;
   }).sort((a,b) => a.date.localeCompare(b.date));
 
-  if (!relevant.length) {
-    el.innerHTML = `<div style="text-align:center;padding:48px 16px">
-      <div style="font-size:48px;margin-bottom:12px">✨</div>
-      <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--forest);margin-bottom:6px">All clear!</div>
-      <div style="font-size:13px;color:var(--text-soft)">No upcoming cleans assigned to you</div>
-    </div>`;
-    return;
-  }
+  // Badges on both tabs
+  const newCount = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined).length;
+  const upcomingCount = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined).length;
+  const newBadge = document.getElementById('csubtab-new-badge');
+  const upBadge = document.getElementById('csubtab-upcoming-badge');
+  const badgeStyle = 'border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;font-weight:700';
+  if (newBadge) newBadge.innerHTML = newCount > 0
+    ? `<span style="background:var(--red);color:white;${badgeStyle}">${newCount}</span>`
+    : `<span style="background:var(--stone);color:white;${badgeStyle}">0</span>`;
+  if (upBadge) upBadge.innerHTML = `<span style="background:${upcomingCount > 0 ? 'var(--forest)' : 'var(--stone)'};color:white;${badgeStyle}">${upcomingCount}</span>`;
 
   const daysUntil = d => {
     const diff = (new Date(d) - new Date(today)) / 86400000;
@@ -6398,37 +6836,27 @@ function renderCleanerCleans() {
     return Math.ceil(diff) + ' days away';
   };
 
-  el.innerHTML = relevant.map(c => {
+  function buildCard(c) {
     const booking = bookings.find(b => b.id === c.bookingId || b.name === c.guestName);
     const checkinStr = booking ? fmt(booking.checkin) : '—';
     const checkoutStr = booking ? fmt(booking.checkout) : fmt(c.date);
     const isToday = c.date === today;
-    const isDone = c.done;
-    const isAccepted = c.cleanerConfirmed && !c.done;
-    const isDeclined = c.cleanerDeclined;
-
-    // Apply permissions
-    const showFirstName  = perm.firstName  && booking;
-    const showFullName   = perm.fullName   && booking;
-    const showGuests     = perm.guests     && booking;
-    const showNotes      = perm.notes;
-    const showPayout     = perm.payout     && booking;
-
-    const nameDisplay = showFullName ? booking.name : showFirstName ? (booking.name||'').split(' ')[0] : null;
-
+    const showFirstName = perm.firstName && booking;
+    const showFullName  = perm.fullName  && booking;
+    const showGuests    = perm.guests    && booking;
+    const showNotes     = perm.notes;
+    const showPayout    = perm.payout    && booking;
+    const nameDisplay   = showFullName ? booking.name : showFirstName ? (booking.name||'').split(' ')[0] : null;
     const urgency = daysUntil(c.date);
 
-    return `
-    <div class="clean-job-card ${isDone ? 'done' : isToday ? 'urgent' : ''}">
+    return `<div class="clean-job-card ${isToday ? 'urgent' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
-          <div style="font-family:'DM Serif Display',serif;font-size:17px;color:var(--forest)">${isDone ? '✅ Done' : isAccepted ? '✅ Accepted' : urgency || 'Upcoming'}</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:17px;color:var(--forest)">${urgency || 'Upcoming'}</div>
           <div style="font-size:12px;color:var(--text-soft);margin-top:2px">${c.date ? fmt(c.date) : '—'}</div>
           ${nameDisplay ? `<div style="font-size:13px;font-weight:600;color:var(--text);margin-top:4px">👤 ${nameDisplay}</div>` : ''}
         </div>
-        ${isDone ? '<div style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:4px 10px;border-radius:20px">Completed</div>'
-                 : isAccepted ? '<div style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:4px 10px;border-radius:20px">Accepted ✓</div>'
-                 : isToday ? '<div style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:4px 10px;border-radius:20px">Today!</div>' : ''}
+        ${isToday ? '<div style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:4px 10px;border-radius:20px">Today!</div>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:${showGuests ? '1fr 1fr 1fr' : '1fr 1fr'};gap:8px;margin-bottom:12px">
         <div style="background:var(--mist);border-radius:8px;padding:8px 10px">
@@ -6446,21 +6874,54 @@ function renderCleanerCleans() {
       </div>
       ${showPayout ? `<div style="background:#EDF7ED;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:var(--forest);font-weight:600">💰 Cleaning fee: $${Number(booking.cleaningFee||0).toLocaleString()}</div>` : ''}
       ${showNotes && c.notes ? `<div style="background:var(--mist);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--text-soft)">📝 ${c.notes}</div>` : ''}
-      ${isDone ? '' : c.cleanerDeclined ? `
-        <div style="background:#FDECEA;border-radius:8px;padding:10px 12px;text-align:center;font-size:13px;color:var(--red);font-weight:600">❌ You declined this clean</div>` :
-        c.cleanerConfirmed ? `
-        <button onclick="cleanerMarkDone('${c.id}')" style="width:100%;background:var(--forest);color:white;border:none;border-radius:var(--radius-sm);padding:13px;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✓ Mark as Complete</button>` : `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      BUTTONS_PLACEHOLDER
+    </div>`;
+  }
+
+  // NEW tab — pending (not yet accepted or declined)
+  const newEl = document.getElementById('cleaner-cleans-new');
+  const newCleans = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined);
+  if (newEl) {
+    if (!newCleans.length) {
+      newEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
+        <div style="font-size:48px;margin-bottom:12px">✨</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--forest);margin-bottom:6px">Nothing new!</div>
+        <div style="font-size:13px;color:var(--text-soft)">New assignments will appear here</div>
+      </div>`;
+    } else {
+      newEl.innerHTML = newCleans.map(c => {
+        const buttons = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <button onclick="cleanerDecline('${c.id}')" style="background:#FDECEA;color:var(--red);border:none;border-radius:var(--radius-sm);padding:13px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✗ Decline</button>
           <button onclick="cleanerAccept('${c.id}')" style="background:var(--forest);color:white;border:none;border-radius:var(--radius-sm);padding:13px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✓ Accept</button>
-        </div>`}
-    </div>`;
-  }).join('');
+        </div>`;
+        return buildCard(c).replace('BUTTONS_PLACEHOLDER', buttons);
+      }).join('');
+    }
+  }
+
+  // UPCOMING tab — accepted cleans
+  const upcomingEl = document.getElementById('cleaner-cleans-upcoming');
+  const upcomingCleans = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined);
+  if (upcomingEl) {
+    if (!upcomingCleans.length) {
+      upcomingEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
+        <div style="font-size:48px;margin-bottom:12px">🗓</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--forest);margin-bottom:6px">No upcoming cleans</div>
+        <div style="font-size:13px;color:var(--text-soft)">Cleans you've accepted will appear here</div>
+      </div>`;
+    } else {
+      upcomingEl.innerHTML = upcomingCleans.map(c => {
+        const buttons = `<button onclick="cleanerMarkDone('${c.id}')" style="width:100%;background:var(--forest);color:white;border:none;border-radius:var(--radius-sm);padding:13px;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✓ Mark as Complete</button>`;
+        return buildCard(c).replace('BUTTONS_PLACEHOLDER', buttons);
+      }).join('');
+    }
+  }
 }
 
 // ── CLEANER INVENTORY VIEW ────────────────────────────────────────────────────
 function renderCleanerInventory() {
-  const el = document.getElementById('cleaner-inventory-view');
+  const el = document.getElementById('cleaner-inventory-list');
+  if (!el) return;
   const lowItems = inventory.filter(i => i.stock <= i.threshold);
   let html = '';
   if (lowItems.length) {
@@ -6489,6 +6950,31 @@ function renderCleanerInventory() {
   }
   el.innerHTML = html;
 }
+async function cleanerAddInventoryItem() {
+  const name = await showAppModal({
+    title: '+ Add Inventory Item',
+    msg: 'Enter the item name:',
+    hasInput: true,
+    inputPlaceholder: 'e.g. Toilet paper',
+    inputType: 'text',
+    confirmText: 'Add',
+    cancelText: 'Cancel'
+  });
+  if (!name || !name.trim()) return;
+  const newItem = {
+    id: Date.now(),
+    name: name.trim(),
+    stock: 0,
+    threshold: 2,
+    unit: ''
+  };
+  inventory.push(newItem);
+  savePropertyData();
+  scheduleAppDataSave('inventory', inventory);
+  renderCleanerInventory();
+  showBanner('✓ Item added', 'ok');
+}
+
 function cleanerAdjustStock(id, delta) {
   const item = inventory.find(i => i.id === id);
   if (!item) return;
@@ -6500,12 +6986,15 @@ async function cleanerAccept(cleanId) {
   if (!c) return;
   c.cleanerConfirmed = true;
   c.cleanerDeclined = false;
+  // Also update booking so owner sees confirmed status in detail
+  const b = bookings.find(bk => bk.id === c.bookingId || bk.name === c.guestName);
+  if (b) b.cleanerConfirmed = true;
   save();
-  pushAppData('cleans', cleans); // push immediately so owner sees it
+  pushAppData('cleans', cleans);
   renderCleanerCleans();
   showBanner('✓ Clean accepted!', 'ok');
   // Push owner
-  const ownerSub = getOwnerSub();
+  const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
     sendPushToDevice(ownerSub,
       '✅ Clean Confirmed',
@@ -6534,7 +7023,7 @@ async function cleanerDecline(cleanId) {
   renderCleanerCleans();
   showBanner('Clean declined', 'ok');
   // Push owner
-  const ownerSub = getOwnerSub();
+  const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
     sendPushToDevice(ownerSub,
       '❌ Clean Declined',
@@ -6554,7 +7043,7 @@ async function cleanerMarkDone(cleanId) {
   save(); pushAppData('cleans', cleans); renderCleanerCleans();
   showBanner('✓ Clean marked as complete', 'ok');
   // Push owner
-  const ownerSub = getOwnerSub();
+  const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
     sendPushToDevice(ownerSub,
       '🏡 Clean Complete!',
@@ -6616,7 +7105,7 @@ async function assignCleanerToBooking(bookingId) {
     }
   } catch(e) { console.warn('Could not refresh pushSubs:', e); }
 
-  // Now send push with fresh subs
+  // Send push notification
   const cleanerSub = getCleanerSub(cleanerObj.id);
   console.log('Cleaner sub for id', cleanerObj.id, ':', cleanerSub ? 'found' : 'NOT FOUND');
   if (cleanerSub) {
@@ -6628,6 +7117,384 @@ async function assignCleanerToBooking(bookingId) {
     );
   } else {
     console.warn('No push subscription found for cleaner', cleanerObj.id, '— cleaner needs to enable notifications');
+  }
+
+  // Send email notification via Gmail/Apps Script (fires silently in background)
+  if (cleanerObj.email) {
+    sendCleanerEmail({
+      cleanerName: cleanerObj.name,
+      cleanerEmail: cleanerObj.email,
+      guestName: booking.name || 'Guest',
+      checkin: fmt(booking.checkin),
+      checkout: fmt(booking.checkout),
+      cleanerLink: cleanerLinkForId(cleanerObj)
+    }).then(result => {
+      if (result.ok) showBanner('✉️ Email sent to ' + cleanerObj.name, 'ok');
+      else if (result.reason !== 'no-key' && result.reason !== 'no-email') console.warn('Email failed:', result);
+    });
+  }
+}
+
+// ── EMAIL TEMPLATES ───────────────────────────────────────────────────────────
+const EMAIL_TEMPLATE_DEFAULTS = {
+  assignment: {
+    subject: 'New clean assigned — {{guest_name}} ({{checkin}})',
+    body: `Hi {{cleaner_name}},
+
+You've been assigned a new clean at Glenhaven.
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Tap the button below to open your app and accept or decline.`,
+    color: '#1E3A2F'
+  },
+  reminder: {
+    subject: '⏰ Reminder: Clean tomorrow — {{guest_name}}',
+    body: `Hi {{cleaner_name}},
+
+Just a reminder — you have a clean tomorrow at Glenhaven.
+
+Guest: {{guest_name}}
+Clean date: {{clean_date}}
+
+Tap the button below to open your app.`,
+    color: '#E65100'
+  }
+};
+
+const EMAIL_TEMPLATE_PRESETS = {
+  assignment: [
+    {
+      label: 'Friendly',
+      subject: 'New clean at Glenhaven — {{checkin}}',
+      body: `Hi {{cleaner_name}},
+
+You've been booked for a clean at Glenhaven! Here are the details:
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Please tap the button below to confirm you can make it.
+
+Thanks so much! 🙏`,
+      color: '#1E3A2F'
+    },
+    {
+      label: 'Professional',
+      subject: 'Clean assigned: {{guest_name}} checks out {{checkout}}',
+      body: `Hi {{cleaner_name}},
+
+A new clean has been assigned to you at Glenhaven.
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Open your app to accept or decline.`,
+      color: '#1E3A2F'
+    }
+  ],
+  reminder: [
+    {
+      label: 'Warm',
+      subject: '⏰ Tomorrow\'s clean — {{guest_name}}',
+      body: `Hi {{cleaner_name}},
+
+Just a heads up — you have a clean tomorrow at Glenhaven after {{guest_name}} checks out.
+
+Date: {{clean_date}}
+
+Everything you need is in your app. See you there! 🏡`,
+      color: '#E65100'
+    },
+    {
+      label: 'Minimal',
+      subject: 'Reminder: Glenhaven clean tomorrow',
+      body: `Hi {{cleaner_name}},
+
+Quick reminder that your clean at Glenhaven is tomorrow.
+
+Guest: {{guest_name}}
+Date: {{clean_date}}
+
+Tap below to open your app.`,
+      color: '#E65100'
+    }
+  ]
+};
+
+function applyPreset(type, idx) {
+  const preset = EMAIL_TEMPLATE_PRESETS[type][idx];
+  if (!preset) return;
+  document.getElementById('etpl-subject').value = preset.subject;
+  document.getElementById('etpl-body').value    = preset.body;
+  document.getElementById('etpl-color').value   = preset.color;
+  document.getElementById('etpl-color-preview').style.background = preset.color;
+  // Highlight selected preset
+  document.querySelectorAll('.etpl-preset-btn').forEach((b, i) => {
+    b.style.background    = i === idx ? 'var(--forest)' : 'var(--mist)';
+    b.style.color         = i === idx ? 'white' : 'var(--forest)';
+    b.style.borderColor   = i === idx ? 'var(--forest)' : 'var(--stone)';
+  });
+  updateEmailPreview(type);
+}
+
+const EMAIL_TEMPLATE_VARS = [
+  { tag: '{{cleaner_name}}', label: 'Cleaner name' },
+  { tag: '{{guest_name}}',   label: 'Guest name' },
+  { tag: '{{checkin}}',      label: 'Check-in date' },
+  { tag: '{{checkout}}',     label: 'Check-out date' },
+  { tag: '{{clean_date}}',   label: 'Clean date' },
+  { tag: '{{cleaner_link}}', label: 'App link' },
+];
+
+function loadEmailTemplate(type) {
+  const saved = loadJSON('gh-email-tpl-' + type);
+  return saved || EMAIL_TEMPLATE_DEFAULTS[type];
+}
+
+function saveEmailTemplate(type) {
+  const subject = document.getElementById('etpl-subject').value;
+  const body    = document.getElementById('etpl-body').value;
+  const color   = document.getElementById('etpl-color').value;
+  const tpl = { subject, body, color };
+  localStorage.setItem('gh-email-tpl-' + type, JSON.stringify(tpl));
+  // Sync reminder template to AppData so Apps Script can use it
+  if (type === 'reminder') scheduleAppDataSave('emailTplReminder', tpl);
+  if (type === 'assignment') scheduleAppDataSave('emailTplAssignment', tpl);
+  const conf = document.getElementById('etpl-save-confirm');
+  if (conf) { conf.style.display = 'block'; setTimeout(() => conf.style.display = 'none', 2000); }
+}
+
+function resetEmailTemplate(type) {
+  const def = EMAIL_TEMPLATE_DEFAULTS[type];
+  document.getElementById('etpl-subject').value = def.subject;
+  document.getElementById('etpl-body').value    = def.body;
+  document.getElementById('etpl-color').value   = def.color;
+  document.getElementById('etpl-color-preview').style.background = def.color;
+}
+
+function insertTemplateVar(tag) {
+  const ta = document.getElementById('etpl-body');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + tag + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + tag.length;
+  ta.focus();
+}
+
+function openEmailTemplatePanel(type) {
+  const tpl = loadEmailTemplate(type);
+  const isAssignment = type === 'assignment';
+  const title = isAssignment ? '📋 Assignment Email' : '⏰ Reminder Email';
+  const desc  = isAssignment ? 'Sent when you assign a clean.' : 'Sent 24 hours before the clean.';
+
+  document.getElementById('email-template-content').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0">
+
+      <!-- EDITOR PANE -->
+      <div style="padding:0">
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div class="card-title" style="margin-bottom:0">${title}</div>
+            <div style="display:flex;gap:6px">
+              <button onclick="resetEmailTemplate('${type}')" style="font-size:11px;background:none;border:1px solid var(--stone);border-radius:20px;padding:4px 10px;cursor:pointer;color:var(--text-soft);font-family:'DM Sans',sans-serif">Reset</button>
+              <button onclick="saveEmailTemplate('${type}')" class="btn-primary" style="font-size:12px;padding:6px 14px">Save</button>
+            </div>
+          </div>
+          <div id="etpl-save-confirm" style="font-size:12px;color:var(--moss);margin-bottom:6px;display:none">✓ Saved</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">${desc}</div>
+
+          <label>Presets</label>
+          <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+            ${(EMAIL_TEMPLATE_PRESETS[type]||[]).map((p,i) => `<button class="etpl-preset-btn" onclick="applyPreset('${type}',${i})"
+              style="font-size:12px;background:var(--mist);border:1px solid var(--stone);border-radius:20px;padding:6px 14px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--forest);font-weight:500">${p.label}</button>`).join('')}
+          </div>
+
+          <label>Subject</label>
+          <input type="text" id="etpl-subject" value="${(tpl.subject||'').replace(/"/g,'&quot;')}"
+            style="font-size:14px;margin-bottom:10px"
+            oninput="updateEmailPreview('${type}')">
+
+          <label>Accent Colour</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <input type="color" id="etpl-color" value="${tpl.color||'#1E3A2F'}"
+              style="width:44px;height:44px;border:none;border-radius:8px;cursor:pointer;padding:2px;flex-shrink:0"
+              oninput="document.getElementById('etpl-color-preview').style.background=this.value;updateEmailPreview('${type}')">
+            <div id="etpl-color-preview" style="flex:1;height:44px;border-radius:8px;background:${tpl.color||'#1E3A2F'}"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <label style="margin:0">Body</label>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:65%">
+              ${EMAIL_TEMPLATE_VARS.map(v => `<button onclick="insertTemplateVar('${v.tag}')"
+                style="font-size:10px;background:var(--mist);border:1px solid var(--stone);border-radius:20px;padding:3px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--forest);white-space:nowrap">${v.label}</button>`).join('')}
+            </div>
+          </div>
+          <textarea id="etpl-body" rows="7"
+            style="font-size:13px;line-height:1.6;font-family:'DM Sans',sans-serif;resize:vertical;margin-bottom:0"
+            oninput="updateEmailPreview('${type}')">${tpl.body||''}</textarea>
+        </div>
+      </div>
+
+      <!-- PREVIEW PANE -->
+      <div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Preview</div>
+        <div style="border-radius:12px;overflow:hidden;border:1px solid var(--warm);background:white">
+          <div style="background:#e8e8e8;padding:8px 12px;display:flex;align-items:center;gap:6px">
+            <div style="width:10px;height:10px;border-radius:50%;background:#FF5F57"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#FEBC2E"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#28C840"></div>
+            <div style="flex:1;background:white;border-radius:4px;padding:3px 8px;font-size:11px;color:#666;margin-left:4px" id="etpl-preview-subject">Subject preview</div>
+          </div>
+          <div id="etpl-preview-body" style="padding:16px;font-size:13px"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('settings-panel-email-template').dataset.tplType = type;
+  openSettingsPanel('email-template');
+  setTimeout(() => updateEmailPreview(type), 50);
+}
+
+function updateEmailPreview(type) {
+  const subject  = document.getElementById('etpl-subject')?.value || '';
+  const body     = document.getElementById('etpl-body')?.value    || '';
+  const color    = document.getElementById('etpl-color')?.value   || '#1E3A2F';
+
+  // Fill with sample values
+  function fillSample(str) {
+    return str
+      .replace(/{{cleaner_name}}/g, 'Megan')
+      .replace(/{{guest_name}}/g,   'Sarah Johnson')
+      .replace(/{{checkin}}/g,       '14 Jun 2025')
+      .replace(/{{checkout}}/g,      '18 Jun 2025')
+      .replace(/{{clean_date}}/g,    '18 Jun 2025')
+      .replace(/{{cleaner_link}}/g,  '#');
+  }
+
+  const subjectEl = document.getElementById('etpl-preview-subject');
+  if (subjectEl) subjectEl.textContent = fillSample(subject) || 'Subject preview';
+
+  const bodyText = fillSample(body);
+  const bodyHtml = bodyText.split('\n').map(line =>
+    line.trim() === '' ? '<br>' : `<p style="margin:0 0 8px;font-size:13px;line-height:1.5">${line}</p>`
+  ).join('');
+
+  const previewEl = document.getElementById('etpl-preview-body');
+  if (previewEl) previewEl.innerHTML = `
+    <div style="font-family:sans-serif;color:#1a1a1a">
+      <div style="background:${color};padding:16px 20px;border-radius:8px 8px 0 0;margin:-16px -16px 16px">
+        <div style="color:white;font-size:16px;font-weight:700">🏡 Glenhaven</div>
+      </div>
+      ${bodyHtml}
+      <div style="margin-top:16px">
+        <div style="background:${color};color:white;text-align:center;padding:12px;border-radius:8px;font-weight:600;font-size:13px">Open My Cleaner App →</div>
+      </div>
+    </div>`;
+}
+function applyEmailTemplate(type, vars) {
+  const tpl = loadEmailTemplate(type);
+  function fill(str) {
+    return str
+      .replace(/{{cleaner_name}}/g, vars.cleanerName || '')
+      .replace(/{{guest_name}}/g,   vars.guestName   || '')
+      .replace(/{{checkin}}/g,      vars.checkin      || '')
+      .replace(/{{checkout}}/g,     vars.checkout     || '')
+      .replace(/{{clean_date}}/g,   vars.cleanDate    || vars.checkin || '')
+      .replace(/{{cleaner_link}}/g, vars.cleanerLink  || '');
+  }
+  const subject = fill(tpl.subject || EMAIL_TEMPLATE_DEFAULTS[type].subject);
+  const bodyText = fill(tpl.body   || EMAIL_TEMPLATE_DEFAULTS[type].body);
+  const color    = tpl.color || EMAIL_TEMPLATE_DEFAULTS[type].color;
+  // Convert plain text body to HTML (preserve line breaks, make link a button)
+  const bodyHtml = bodyText
+    .split('\n')
+    .map(line => line.trim() === '' ? '<br>' : `<p style="margin:0 0 8px">${line}</p>`)
+    .join('');
+  const html = `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
+    <div style="background:${color};padding:20px 24px;border-radius:10px 10px 0 0">
+      <h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1>
+    </div>
+    <div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">
+      ${bodyHtml}
+      <div style="margin-top:20px">
+        <a href="${vars.cleanerLink||'#'}" style="display:block;background:${color};color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>
+      </div>
+    </div>
+  </div>`;
+  return { subject, html, text: bodyText };
+}
+async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin, checkout, cleanerLink, cleanDate, type }) {
+  const scriptUrl = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+  if (!cleanerEmail) return { ok: false, reason: 'no-email' };
+  const emailType = type || 'assignment';
+  const { subject, html, text } = applyEmailTemplate(emailType, {
+    cleanerName: cleanerName.split(' ')[0],
+    guestName, checkin, checkout,
+    cleanDate: cleanDate || checkin,
+    cleanerLink
+  });
+  try {
+    const resp = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'sendEmail', to: cleanerEmail, subject, html, text })
+    });
+    const data = await resp.json();
+    return { ok: data.success, data };
+  } catch(e) {
+    return { ok: false, reason: e.message };
+  }
+}
+
+async function debugCSVColumns() {
+  const el = document.getElementById('csv-debug-result');
+  el.style.display = 'block';
+  if (window._csvDebug) {
+    el.textContent = window._csvDebug;
+    return;
+  }
+  el.textContent = 'Fetching…';
+  try {
+    const res = await fetch(SHEET_URL + '&t=' + Date.now());
+    const csv = await res.text();
+    const lines = csv.trim().split('\n').filter(l => l.trim());
+    const headers = parseCSVLine(lines[0]);
+    const firstRow = lines.length > 1 ? parseCSVLine(lines[1]) : [];
+    let out = 'HEADERS:\n';
+    headers.forEach((h, i) => { out += `[${i}] col ${String.fromCharCode(65+i)}: "${h}"\n`; });
+    out += '\nFIRST DATA ROW:\n';
+    firstRow.forEach((v, i) => { out += `[${i}]: ${JSON.stringify(v)}\n`; });
+    el.textContent = out;
+    window._csvDebug = out;
+  } catch(e) {
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function testCleanerEmail() {
+  const resultEl = document.getElementById('email-test-result');
+  if (resultEl) { resultEl.style.display = 'block'; resultEl.style.background = 'var(--warm)'; resultEl.style.color = 'var(--text-soft)'; resultEl.textContent = 'Sending…'; }
+  const cleaners = loadCleaners().filter(c => c.email);
+  if (!cleaners.length) {
+    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Add an email to at least one team member first (Settings → Property → Team)'; }
+    return;
+  }
+  const c = cleaners[0];
+  const ownerEmail = localStorage.getItem('gh-owner-email') || localStorage.getItem('gh-invoice-email');
+  const testTo = ownerEmail || c.email;
+  const result = await sendCleanerEmail({
+    cleanerName: c.name, cleanerEmail: testTo,
+    guestName: 'Test Guest', checkin: 'Tomorrow', checkout: 'Day after',
+    cleanerLink: cleanerLinkForId(c)
+  });
+  if (resultEl) {
+    if (result.ok) { resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)'; resultEl.textContent = '✓ Test email sent to ' + testTo; }
+    else { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '✕ Failed — check your Apps Script URL is saved and deployed'; }
   }
 }
 
@@ -6643,55 +7510,32 @@ function renderCleanerAccessList() {
     el.innerHTML = `<div class="card" style="margin-bottom:12px;text-align:center;padding:24px">
       <div style="font-size:32px;margin-bottom:8px">🧹</div>
       <div style="font-weight:600;font-size:14px;margin-bottom:6px">No cleaners added yet</div>
-      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px">Add cleaners in Settings → Property &amp; People first</div>
-      <button onclick="openSettingsCat('property')" class="btn-primary">Go to Property &amp; People</button>
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px">Go to Settings → Property → Team to add cleaners</div>
+      <button onclick="openSettingsCat('property');openSettingsPanel('team')" class="btn-primary">Add Team Members</button>
     </div>`;
     return;
   }
-  const PERM_LABELS = [
-    { key: 'firstName',  label: 'Guest first name' },
-    { key: 'fullName',   label: 'Full guest name' },
-    { key: 'guests',     label: 'Number of guests' },
-    { key: 'notes',      label: 'Check-in notes' },
-    { key: 'payout',     label: 'Cleaning fee / payout' },
-  ];
-  el.innerHTML = cleaners.map(c => {
-    const perm = c.permissions || {};
-    const link = cleanerLinkForId(c);
-    return `<div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--warm)">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--forest);color:white;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:15px">${c.name}</div>
-          <div style="font-size:11px;color:var(--text-soft)">${c.phone||'No phone'}</div>
+  el.innerHTML = `<div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:12px">` +
+    cleaners.map((c, i) => `
+    <div class="settings-cat-item" onclick="openCleanerProfile(${c.id})" ${i===cleaners.length-1?'style="border-bottom:none"':''}>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--forest);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
+        <div>
+          <div style="font-weight:500;font-size:14px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.pin ? '🔐 PIN set' : '⚠️ No PIN'} · ${c.email ? '✉️ Email set' : 'No email'}</div>
         </div>
       </div>
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:8px">🔐 PIN</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="font-size:20px;font-weight:700;color:var(--forest);letter-spacing:5px;flex:1">${c.pin || '—'}</div>
-          ${c.pin ? `<button onclick="clearCleanerPinById(${c.id})" style="font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:20px;padding:4px 10px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap">Clear</button>` : ''}
-        </div>
-        <input type="text" inputmode="numeric" pattern="\d*" id="pin-input-${c.id}" placeholder="Set 4-digit PIN" maxlength="4"
-          style="width:100%;font-size:20px;letter-spacing:8px;text-align:center;padding:12px;border:1.5px solid var(--stone);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;background:white;margin-bottom:8px;color:var(--text)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
-        <button onclick="saveCleanerPinById(${c.id})" class="btn-primary" style="width:100%">Save PIN</button>
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>`).join('') + `</div>
+  <div class="card" style="padding:0 16px;overflow:hidden">
+    <div class="settings-cat-item" onclick="openSettingsCat('property');setTimeout(()=>openSettingsPanel('team'),50)" style="border-bottom:none">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">＋</div>
+        <div style="font-weight:500;font-size:14px;color:var(--forest)">Add Person</div>
       </div>
-      <div style="margin-bottom:12px;padding-top:12px;border-top:1px solid var(--warm)">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">👁 What they can see</div>
-        ${PERM_LABELS.map(p => `
-        <div class="ios-toggle-row" style="padding:6px 0">
-          <div class="ios-toggle-label" style="font-size:13px">${p.label}</div>
-          <label class="ios-toggle"><input type="checkbox" ${perm[p.key]?'checked':''} onchange="saveCleanerPerm(${c.id},'${p.key}',this.checked)"><div class="ios-toggle-track"></div><div class="ios-toggle-thumb"></div></label>
-        </div>`).join('')}
-      </div>
-      <div style="padding-top:12px;border-top:1px solid var(--warm)">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:8px">🔗 Their Link</div>
-        <div style="background:var(--mist);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--forest);font-weight:500;word-break:break-all;margin-bottom:8px;border:1px solid var(--warm)">${link}</div>
-        <button onclick="copyCleanerLinkById(${c.id})" class="btn-primary" style="width:100%">📋 Copy Link</button>
-      </div>
-    </div>`;
-  }).join('');
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>
+  </div>`;
 }
 function cleanerLinkForId(c) {
   const base = window.location.origin + window.location.pathname;
@@ -6783,7 +7627,7 @@ function exportReportPDF() {
   const months = fyMonths(reportFY);
   const fmt2 = n => '$' + Number(n).toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0});
   function mdata(yr, mo) {
-    const bs = bookings.filter(b => { const d=new Date(b.checkin); return d.getFullYear()===yr&&d.getMonth()===mo; });
+    const bs = bookings.filter(b => b.status !== 'cancelled' && (function(){ const d=new Date(b.checkin); return d.getFullYear()===yr&&d.getMonth()===mo; })());
     const avail = new Date(yr,mo+1,0).getDate();
     const booked = bs.reduce((s,b)=>s+Number(b.nights||0),0);
     const rev = bs.reduce((s,b)=>s+Number(b.hostPayout||0),0);
