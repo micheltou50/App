@@ -1565,6 +1565,17 @@
 </div>
 
 <script>
+// ── HTML ESCAPE HELPER — use for any user/sheet data injected into innerHTML ──
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ── CONFIG ────────────────────────────────────────────────────────────────
 const SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTlssTFmteUx1q3NkqRz2hAIqtJbt8OlRxl8VcX1x5gW6mI8W52n3xutATDO13qlRNoobKSsmVPciDR/pub?gid=0&single=true&output=csv";
 const DEFAULT_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzM0wcdsUqK03faXxk2VqTAEqzno4GCAMzFYGrUXc4y1LKDwd8GbCKhNJruvbXJGhOflw/exec";
@@ -1883,7 +1894,7 @@ async function syncFromSheets(manual = false) {
       );
       const finalMgmtFeeRaw = mgmtFeeRaw || (existingB ? existingB.mgmtFeeRaw : 0);
       imported.push({
-        id: existingB ? existingB.id : (i * 1000 + 1),
+        id: existingB ? existingB.id : (Date.now() + i),
         checkin, checkout, nights, name,
         guests: Number(p[col.guests]) || 1,
         hostPayout, cleaningFee, mgmtFee, mgmtFeeRaw: finalMgmtFeeRaw, mgmtPayout, netPayout,
@@ -2232,9 +2243,9 @@ function renderBookings(filter) {
       <div class="booking-item" style="border:none;padding:0" data-booking-id="${b.id}">
         ${platformIcon(b.platform, 42)}
         <div class="booking-info">
-          <div class="booking-name">${b.name}</div>
-          <div class="booking-dates">${fmt(b.checkin)} → ${fmt(b.checkout)}</div>
-          <div class="booking-guests">${b.guests} guests · ${b.nights} night${b.nights!==1?'s':''}</div>
+          <div class="booking-name">${escHtml(b.name)}</div>
+          <div class="booking-dates">${escHtml(fmt(b.checkin))} → ${escHtml(fmt(b.checkout))}</div>
+          <div class="booking-guests">${escHtml(b.guests)} guests · ${escHtml(b.nights)} night${b.nights!==1?'s':''}</div>
         </div>
         <div class="booking-right">
           <div class="booking-amount" style="${isCancelled?'text-decoration:line-through;color:var(--text-soft)':''}">$${Number(b.hostPayout||0).toLocaleString()}</div>
@@ -2272,9 +2283,9 @@ function renderCleaning() {
     return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
         <div>
-          <div style="font-weight:600;font-size:14px">${b ? b.name : (c.guestName || '—')}</div>
-          <div style="font-size:12px;color:var(--text-soft);margin-top:2px">🧹 ${c.cleaner || '—'} · ${fmt(c.date)}</div>
-          ${b ? `<div style="font-size:12px;color:var(--text-soft)">Checkout: ${fmt(b.checkout)}</div>` : ''}
+          <div style="font-weight:600;font-size:14px">${escHtml(b ? b.name : (c.guestName || '—'))}</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-top:2px">🧹 ${escHtml(c.cleaner || '—')} · ${escHtml(fmt(c.date))}</div>
+          ${b ? `<div style="font-size:12px;color:var(--text-soft)">Checkout: ${escHtml(fmt(b.checkout))}</div>` : ''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
           <div class="clean-urgency ${urgClass}">${urgText}</div>
@@ -2336,8 +2347,8 @@ function renderCleaning() {
         return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
           <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
-              <div style="font-weight:600;font-size:14px">${b.name || ''}</div>
-              <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${fmt(b.checkout)} · ${b.guests || 0} guests</div>
+              <div style="font-weight:600;font-size:14px">${escHtml(b.name || '')}</div>
+              <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${escHtml(fmt(b.checkout))} · ${escHtml(b.guests || 0)} guests</div>
             </div>
             <div class="clean-urgency ${urgClass}">No cleaner</div>
           </div>
@@ -2970,17 +2981,10 @@ async function resetExpenseCats() {
 
 // ── SMART PRICING ─────────────────────────────────────────────────────────
 async function getSmartPricing() {
-  const apiKey = getApiKey();
   const status = document.getElementById('pricing-status');
   const result = document.getElementById('pricing-result');
   status.style.display = 'block';
   result.innerHTML = '';
-
-  if (!apiKey) {
-    status.style.background = '#FFF8E1'; status.style.color = '#E65100';
-    status.textContent = '⚠ Add your Anthropic API key in Settings → AI Tools first';
-    return;
-  }
 
   const period = document.getElementById('pricing-period').value;
   const baseRate = document.getElementById('pricing-base-rate').value;
@@ -3058,14 +3062,9 @@ dates: array of specific YYYY-MM-DD for exact holidays/events, optional
 List 8-12 periods. Higher rates on Fri/Sat than Sun. Peak Jan 1, Easter, June festival weeks, school holidays, long weekends.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4000,
@@ -3527,11 +3526,11 @@ function toggleClean(id) {
   if (c){
     c.done=!c.done;
     save();
-    // If marking done, show past tab
+    // If marking done, switch to Done tab
     if (c.done) {
-      cleanFilter='past';
+      cleanFilter='done';
       document.querySelectorAll('#section-cleaning .tab-row .tab').forEach((t,i)=>{
-        t.classList.toggle('active', i===1);
+        t.classList.toggle('active', i===2);
       });
     }
     renderCleaning(); renderDashboard();
@@ -4277,14 +4276,7 @@ function clearExpenseFilters() {
 
 // ── AI EXPENSE ANALYSER ───────────────────────────────────────────────────
 async function analyseExpenses() {
-  const apiKey = getApiKey();
   const resultEl = document.getElementById('expense-analysis-result');
-
-  if (!apiKey) {
-    resultEl.style.display = 'block';
-    resultEl.innerHTML = '⚠️ Add your Anthropic API key in Settings → AI Tools first.';
-    return;
-  }
 
   if (!expenses.length) {
     resultEl.style.display = 'block';
@@ -4344,14 +4336,9 @@ Return ONLY valid JSON, no markdown:
 Return empty arrays if nothing found in a category.`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 4000,
@@ -5310,26 +5297,20 @@ function clearExpensePhoto() {
 }
 
 async function extractExpenseFromReceipt() {
-  const apiKey = getApiKey();
   const status = document.getElementById('expense-extract-status');
   status.style.display = 'block';
-  if (!apiKey) {
+  if (!expensePhotoBase64) {
     status.style.background = '#FFF8E1'; status.style.color = '#E65100';
-    status.textContent = '⚠ Add API key in Settings → Screenshot Reader to enable auto-fill';
+    status.textContent = '⚠ Please attach a receipt image or PDF first';
     return;
   }
   status.style.background = '#FFF8E1'; status.style.color = '#E65100';
   status.textContent = '⟳ Reading receipt...';
   try {
     const cats = getExpenseCats();
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 500,
@@ -6038,11 +6019,6 @@ function readBookingScreenshot(input) {
 
 async function extractBookingFromScreenshot() {
   if (!screenshotBase64) { showBanner('⚠ Please select a screenshot first', 'warn'); return; }
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    showBanner('⚠ Please add your Anthropic API key in Settings first','warn'); return; //);
-    return;
-  }
   const btn = document.getElementById('screenshot-extract-btn');
   const status = document.getElementById('screenshot-status');
   btn.disabled = true;
@@ -6053,14 +6029,9 @@ async function extractBookingFromScreenshot() {
   status.textContent = '⟳ Analysing booking screenshot...';
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/.netlify/functions/ai', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,

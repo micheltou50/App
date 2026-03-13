@@ -1,6 +1,6 @@
 // Netlify/functions/send-email.js
 // Sends cleaner assignment emails via Resend API
-// API key is passed from the client (stored in owner's localStorage)
+// Set RESEND_API_KEY and RESEND_FROM in Netlify environment variables.
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -14,12 +14,24 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON' }) };
   }
 
-  const { apiKey, from, to, subject, html } = payload;
+  const { to, subject, html } = payload;
 
-  if (!apiKey || !from || !to || !subject || !html) {
+  // API key and from address live server-side — never sent from the browser
+  const apiKey = process.env.RESEND_API_KEY;
+  const from   = process.env.RESEND_FROM || 'Glenhaven <noreply@glenhaven21.netlify.app>';
+
+  if (!apiKey) {
+    console.error('[send-email] RESEND_API_KEY env var is not set');
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Email not configured — set RESEND_API_KEY in Netlify environment variables' })
+    };
+  }
+
+  if (!to || !subject || !html) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing required fields: apiKey, from, to, subject, html' })
+      body: JSON.stringify({ error: 'Missing required fields: to, subject, html' })
     };
   }
 
