@@ -733,14 +733,21 @@
         <div class="settings-cat-item" onclick="openSettingsCat('property')">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏠</div>
-            <div><div style="font-weight:500;font-size:14px">Property</div><div style="font-size:12px;color:var(--text-soft)">Info, team & notifications</div></div>
+            <div><div style="font-weight:500;font-size:14px">Property</div><div style="font-size:12px;color:var(--text-soft)">Info & SMS template</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
-        <div class="settings-cat-item" onclick="openSettingsCat('cleaner')" style="border-bottom:none">
+        <div class="settings-cat-item" onclick="openSettingsCat('cleaner')">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🧹</div>
             <div><div style="font-weight:500;font-size:14px">Team Access</div><div style="font-size:12px;color:var(--text-soft)">Cleaner links & permissions</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('notifications')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔔</div>
+            <div><div style="font-weight:500;font-size:14px">Notifications</div><div style="font-size:12px;color:var(--text-soft)" id="notif-status-row-menu">Tap to set up</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
@@ -761,8 +768,8 @@
       <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
         <div class="settings-cat-item" onclick="openSettingsCat('google')">
           <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#5AC8FA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">☁️</div>
-            <div><div style="font-weight:500;font-size:14px">Integrations</div><div style="font-size:12px;color:var(--text-soft)">Google Sheets, Drive & Calendar</div></div>
+            <div style="width:36px;height:36px;border-radius:9px;background:#4285F4;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔗</div>
+            <div><div style="font-weight:500;font-size:14px">Google Services</div><div style="font-size:12px;color:var(--text-soft)">Sheets, Drive & Calendar</div></div>
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
@@ -809,19 +816,6 @@
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
       </div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Notifications</div>
-      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsPanel('notifications')" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🔔</div>
-            <div>
-              <div style="font-weight:500;font-size:14px">Push Notifications</div>
-              <div style="font-size:12px;color:var(--text-soft)" id="notif-status-row">Tap to set up</div>
-            </div>
-          </div>
-          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-      </div>
     </div>
 
     <!-- PANEL: PROPERTY INFO -->
@@ -839,7 +833,7 @@
 
     <!-- PANEL: PUSH NOTIFICATIONS -->
     <div id="settings-panel-notifications" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Property</div>
+      <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
       <div class="card">
         <div class="card-title">🔔 Push Notifications</div>
         <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Get notified when your cleaner accepts, declines, or completes a clean. On iPhone, you must tap the button below — iOS requires a manual tap to enable notifications.</div>
@@ -1003,62 +997,40 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
-         INTEGRATIONS SUB-SCREEN (was Google & Sync)
+         GOOGLE SERVICES SUB-SCREEN
     ═══════════════════════════════════════════════════════ -->
     <div id="settings-cat-google" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Sheets</div>
       <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsPanel('bookings-sync')">
+        <div class="settings-cat-item" onclick="openSettingsPanel('sheets')">
           <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📋</div>
-            <div><div style="font-weight:500;font-size:14px">Bookings Sync</div><div style="font-size:12px;color:var(--text-soft)">Pull & push booking data</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📊</div>
+            <div><div style="font-weight:500;font-size:14px">Google Sheets</div><div style="font-size:12px;color:var(--text-soft)">Sync bookings, expenses & data</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
-        <div class="settings-cat-item" onclick="openSettingsPanel('expenses-sync')" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#FF9500;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">💰</div>
-            <div><div style="font-weight:500;font-size:14px">Expenses Sync</div><div style="font-size:12px;color:var(--text-soft)">Sync expenses to sheet</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-      </div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Google Services</div>
-      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
         <div class="settings-cat-item" onclick="openSettingsPanel('drive')">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#4285F4;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📁</div>
-            <div><div style="font-weight:500;font-size:14px">Google Drive</div><div style="font-size:12px;color:var(--text-soft)" id="gdrive-status-row">Receipt storage</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+            <div><div style="font-weight:500;font-size:14px">Google Drive</div><div style="font-size:12px;color:var(--text-soft)" id="gdrive-status-row">Receipts & backups</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
         <div class="settings-cat-item" onclick="openSettingsPanel('calendar')" style="border-bottom:none">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#1a73e8;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📅</div>
             <div><div style="font-weight:500;font-size:14px">Google Calendar</div><div style="font-size:12px;color:var(--text-soft)">Push bookings as events</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-      </div>
-      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Advanced</div>
-      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
-        <div class="settings-cat-item" onclick="openSettingsPanel('apps-script')">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#636366;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⚙️</div>
-            <div><div style="font-weight:500;font-size:14px">Apps Script</div><div style="font-size:12px;color:var(--text-soft)">Configure connection URL</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
-        </div>
-        <div class="settings-cat-item" onclick="openSettingsPanel('backup');document.getElementById('backup-last-time').textContent=localStorage.getItem('gh-last-backup')||'Never'" style="border-bottom:none">
-          <div style="display:flex;align-items:center;gap:14px">
-            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">☁️</div>
-            <div><div style="font-weight:500;font-size:14px">Backup & Restore</div><div style="font-size:12px;color:var(--text-soft)">Save or restore app data</div></div>
-          </div><div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
       </div>
     </div>
 
-    <!-- PANEL: BOOKINGS SYNC -->
-    <div id="settings-panel-bookings-sync" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Integrations</div>
+    <!-- PANEL: GOOGLE SHEETS (all sheets-related in one place) -->
+    <div id="settings-panel-sheets" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google Services</div>
       <div class="card" style="margin-bottom:10px">
-        <div class="card-title">📋 Bookings — Google Sheets</div>
+        <div class="card-title">📊 Bookings Sync</div>
         <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px">Last synced: <span id="settings-last-sync">—</span></div>
         <div style="font-size:13px;color:var(--text-soft);margin-bottom:16px" id="settings-booking-count"></div>
         <button class="btn-primary" onclick="syncFromSheets(true)">↻ Pull Bookings from Sheet</button>
@@ -1066,36 +1038,38 @@
         <div id="pull-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
         <div style="font-size:11px;color:var(--text-soft);margin-top:6px;line-height:1.5">Syncs cleaners, cleans, inventory &amp; notes from AppData tab.</div>
         <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push App Data to Sheet</div>
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push to Sheet</div>
           <button class="btn-primary" onclick="pushAllAppData()" id="push-appdata-btn">⬆ Push App Data to Sheet</button>
           <div id="push-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
-        </div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
-          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Push Bookings to Sheet</div>
-          <button class="btn-secondary" onclick="chooseGoogleAccount()" style="margin-bottom:6px">① Sign in / Switch Account</button>
+          <button class="btn-secondary" onclick="chooseGoogleAccount()" style="margin-top:8px;margin-bottom:6px">① Sign in / Switch Account</button>
           <button class="btn-primary" onclick="syncToSheet()" style="background:var(--amber)">② Push All Bookings</button>
+          <div id="push-sync-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
         </div>
-        <div id="push-sync-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
       </div>
-    </div>
-
-    <!-- PANEL: EXPENSES SYNC -->
-    <div id="settings-panel-expenses-sync" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Integrations</div>
-      <div class="card">
-        <div class="card-title">💰 Expenses — Google Sheets</div>
+      <div class="card" style="margin-bottom:10px">
+        <div class="card-title">💰 Expenses Sync</div>
         <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Only updates what's missing or changed.</div>
         <button class="btn-primary" onclick="smartSyncExpenses()" style="background:#5AC8FA;color:white">☁️ Sync Expenses to Sheet</button>
         <button class="btn-secondary" onclick="migrateCategoriesInSheet()" style="margin-top:6px">🔄 Update Category Names</button>
         <div id="push-expenses-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
       </div>
+      <div class="card">
+        <div class="card-title">⚙️ Apps Script Connection</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">The URL that connects the app to your Google Sheet.</div>
+        <label>Apps Script URL</label>
+        <input type="url" id="settings-script-url" placeholder="https://script.google.com/macros/s/...">
+        <button class="btn-secondary" onclick="saveScriptURL()">Save URL</button>
+        <button class="btn-secondary" onclick="testScriptConnection()" style="margin-top:6px;background:#E3F2FD;color:#1565C0">🔗 Test Connection</button>
+        <div id="script-url-confirm" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
+        <div id="script-test-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
+      </div>
     </div>
 
-    <!-- PANEL: GOOGLE DRIVE -->
+    <!-- PANEL: GOOGLE DRIVE (connect + receipts + backup all together) -->
     <div id="settings-panel-drive" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Integrations</div>
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google Services</div>
       <div class="card" style="margin-bottom:10px">
-        <div class="card-title">📁 Google Drive — Receipt Storage</div>
+        <div class="card-title">📁 Connect Google Drive</div>
         <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Connect to save receipts to a <strong>Glenhaven Receipts</strong> folder. Requires a Google OAuth Client ID.</div>
         <label>OAuth Client ID</label>
         <input type="text" id="gdrive-client-id" placeholder="xxxxx.apps.googleusercontent.com">
@@ -1109,37 +1083,6 @@
           <strong>Setup:</strong><br>1. console.cloud.google.com<br>2. Create project → Enable Drive API<br>3. OAuth consent → External<br>4. Credentials → OAuth 2.0 Client ID (Web app)<br>5. Add your Netlify URL as authorised origin<br>6. Paste Client ID above
         </div>
       </div>
-    </div>
-
-    <!-- PANEL: CALENDAR -->
-    <div id="settings-panel-calendar" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Integrations</div>
-      <div class="card">
-        <div class="card-title">📅 Google Calendar</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Push all bookings to Google Calendar as events. Uses the same Drive connection.</div>
-        <button class="btn-primary" onclick="syncToGoogleCalendar()" style="background:#1a73e8">📅 Sync Bookings to Calendar</button>
-        <div id="gcal-sync-result" style="display:none;font-size:12px;margin-top:8px;padding:8px;border-radius:8px"></div>
-      </div>
-    </div>
-
-    <!-- PANEL: APPS SCRIPT -->
-    <div id="settings-panel-apps-script" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Integrations</div>
-      <div class="card">
-        <div class="card-title">⚙️ Apps Script Connection</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">The URL that connects the app to your Google Sheet.</div>
-        <label>Apps Script URL</label>
-        <input type="url" id="settings-script-url" placeholder="https://script.google.com/macros/s/...">
-        <button class="btn-secondary" onclick="saveScriptURL()">Save URL</button>
-        <button class="btn-secondary" onclick="testScriptConnection()" style="margin-top:6px;background:#E3F2FD;color:#1565C0">🔗 Test Connection</button>
-        <div id="script-url-confirm" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
-        <div id="script-test-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
-      </div>
-    </div>
-
-    <!-- PANEL: BACKUP -->
-    <div id="settings-panel-backup" style="display:none">
-      <div class="settings-back" onclick="closeSettingsPanel()">‹ Integrations</div>
       <div class="card" style="margin-bottom:10px">
         <div class="card-title">☁️ Backup to Google Drive</div>
         <div style="font-size:13px;color:var(--text-soft);margin-bottom:4px;line-height:1.5">Saves everything to a <strong>Glenhaven Backups</strong> folder. Keeps the last 30 backups.</div>
@@ -1157,6 +1100,17 @@
         <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px"><strong style="color:var(--red)">Replaces all current data.</strong></div>
         <button class="btn-secondary" onclick="listBackups()">🔄 Load Backup List</button>
         <div id="backup-list" style="margin-top:12px"></div>
+      </div>
+    </div>
+
+    <!-- PANEL: GOOGLE CALENDAR -->
+    <div id="settings-panel-calendar" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Google Services</div>
+      <div class="card">
+        <div class="card-title">📅 Google Calendar</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Push all bookings to Google Calendar as events. Uses the same Drive connection — connect Drive first.</div>
+        <button class="btn-primary" onclick="syncToGoogleCalendar()" style="background:#1a73e8">📅 Sync Bookings to Calendar</button>
+        <div id="gcal-sync-result" style="display:none;font-size:12px;margin-top:8px;padding:8px;border-radius:8px"></div>
       </div>
     </div>
 
@@ -1567,23 +1521,24 @@ async function enableNotificationsManually() {
 
 function updateNotifStatus() {
   const el = document.getElementById('notif-status');
-  if (!el) return;
+  const menuRow = document.getElementById('notif-status-row-menu');
+  if (!el && !menuRow) return;
   if (!('Notification' in window)) {
-    el.textContent = '⚠️ Notifications not supported on this browser.';
-    el.style.background = '#FDECEA'; el.style.color = 'var(--red)';
+    if (el) { el.textContent = '⚠️ Notifications not supported on this browser.'; el.style.background = '#FDECEA'; el.style.color = 'var(--red)'; }
+    if (menuRow) menuRow.textContent = '⚠️ Not supported';
     return;
   }
   const perm = Notification.permission;
   const sub = getOwnerSub();
   if (perm === 'granted' && sub) {
-    el.textContent = '✅ Notifications active on this device.';
-    el.style.background = '#F0FAF4'; el.style.color = 'var(--moss)';
+    if (el) { el.textContent = '✅ Notifications active on this device.'; el.style.background = '#F0FAF4'; el.style.color = 'var(--moss)'; }
+    if (menuRow) menuRow.textContent = '✅ Active';
   } else if (perm === 'denied') {
-    el.textContent = '❌ Notifications blocked — change in device Settings.';
-    el.style.background = '#FDECEA'; el.style.color = 'var(--red)';
+    if (el) { el.textContent = '❌ Notifications blocked — change in device Settings.'; el.style.background = '#FDECEA'; el.style.color = 'var(--red)'; }
+    if (menuRow) menuRow.textContent = '❌ Blocked';
   } else {
-    el.textContent = '⚪ Notifications not yet enabled on this device.';
-    el.style.background = 'var(--warm)'; el.style.color = 'var(--text-soft)';
+    if (el) { el.textContent = '⚪ Notifications not yet enabled on this device.'; el.style.background = 'var(--warm)'; el.style.color = 'var(--text-soft)'; }
+    if (menuRow) menuRow.textContent = 'Tap to set up';
   }
 }
 
@@ -2728,7 +2683,7 @@ function openSettingsCat(cat) {
   if (cat === 'property') {
     // update notification status row
     setTimeout(updateNotifStatus, 100);
-    const sr = document.getElementById('notif-status-row');
+    const sr = document.getElementById('notif-status-row-menu');
     if (sr) { const p = Notification.permission; sr.textContent = p === 'granted' ? '✅ Enabled' : p === 'denied' ? '❌ Blocked' : 'Tap to set up'; }
   }
   if (cat === 'google') {
@@ -2776,6 +2731,10 @@ function openSettingsPanel(panelId) {
   }
   if (panelId === 'invoice-clients') {
     renderClientsList();
+  }
+  if (panelId === 'sheets') {
+    const el = document.getElementById('settings-script-url');
+    if (el) el.value = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
   }
   if (panelId === 'apps-script') {
     const el = document.getElementById('settings-script-url');
@@ -3153,11 +3112,14 @@ function renderPricingCalendar(data, bookedDates, startDate, endDate) {
 }
 function renderSettings() {
   const lastSync = localStorage.getItem('gh-last-sync') || 'Never';
-  document.getElementById('settings-last-sync').textContent = lastSync;
-  document.getElementById('settings-booking-count').textContent = bookings.length + ' bookings loaded';
+  const lsEl = document.getElementById('settings-last-sync');
+  if (lsEl) lsEl.textContent = lastSync;
+  const bcEl = document.getElementById('settings-booking-count');
+  if (bcEl) bcEl.textContent = bookings.length + ' bookings loaded';
   const lastBackup = localStorage.getItem('gh-last-backup') || 'Never';
-  const el = document.getElementById('backup-last-time');
-  if (el) el.textContent = lastBackup;
+  const buEl = document.getElementById('backup-last-time');
+  if (buEl) buEl.textContent = lastBackup;
+  setTimeout(updateNotifStatus, 100);
 }
 
 function populateSelects() {
