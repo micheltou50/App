@@ -904,18 +904,40 @@
         <button class="btn-primary" onclick="enableNotificationsManually()" id="notif-enable-btn">🔔 Enable Notifications on This Device</button>
         <div id="notif-result" style="font-size:12px;margin-top:8px;display:none"></div>
       </div>
-      <div class="card">
+      <div class="card" style="margin-bottom:10px">
         <div class="card-title">✉️ Email Notifications</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Automatically emails your cleaner when you assign a clean, and again 24 hours before. Sent via Gmail through your Apps Script — no setup needed beyond adding cleaner emails.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Automatically emails your cleaner when you assign a clean, and again 24 hours before. Sent via Gmail through your Apps Script.</div>
         <div style="background:var(--mist);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:14px">
           ✅ Uses your existing Apps Script connection<br>
           ✅ Sent from your Gmail account<br>
           ✅ Completely free<br>
           ⚙️ Add emails to cleaners in <strong>Settings → Property → Team</strong>
         </div>
-        <button class="btn-secondary" onclick="testCleanerEmail()">✉️ Send Test Email</button>
+        <button class="btn-secondary" onclick="testCleanerEmail()">✉️ Send Test Email to Me</button>
         <div id="email-test-result" style="font-size:12px;margin-top:8px;display:none;padding:8px;border-radius:8px"></div>
       </div>
+      <div class="card" style="padding:0 16px;overflow:hidden">
+        <div class="settings-cat-item" onclick="openEmailTemplatePanel('assignment')">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📋</div>
+            <div><div style="font-weight:500;font-size:14px">Assignment Email</div><div style="font-size:12px;color:var(--text-soft)">Sent when you assign a clean</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+        <div class="settings-cat-item" onclick="openEmailTemplatePanel('reminder')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#E65100;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">⏰</div>
+            <div><div style="font-weight:500;font-size:14px">Reminder Email</div><div style="font-size:12px;color:var(--text-soft)">Sent 24 hours before the clean</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: EMAIL TEMPLATE EDITOR -->
+    <div id="settings-panel-email-template" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Notifications</div>
+      <div id="email-template-content"></div>
     </div>
 
     <!-- PANEL: SMS TEMPLATE -->
@@ -7142,33 +7164,230 @@ async function assignCleanerToBooking(bookingId) {
   }
 }
 
-// ── EMAIL NOTIFICATIONS VIA GMAIL (Apps Script) ───────────────────────────────
-async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin, checkout, cleanerLink }) {
+// ── EMAIL TEMPLATES ───────────────────────────────────────────────────────────
+const EMAIL_TEMPLATE_DEFAULTS = {
+  assignment: {
+    subject: 'New clean assigned — {{guest_name}} ({{checkin}})',
+    body: `Hi {{cleaner_name}},
+
+You've been assigned a new clean at Glenhaven.
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Tap the button below to open your app and accept or decline.`,
+    color: '#1E3A2F'
+  },
+  reminder: {
+    subject: '⏰ Reminder: Clean tomorrow — {{guest_name}}',
+    body: `Hi {{cleaner_name}},
+
+Just a reminder — you have a clean tomorrow at Glenhaven.
+
+Guest: {{guest_name}}
+Clean date: {{clean_date}}
+
+Tap the button below to open your app.`,
+    color: '#E65100'
+  }
+};
+
+const EMAIL_TEMPLATE_VARS = [
+  { tag: '{{cleaner_name}}', label: 'Cleaner name' },
+  { tag: '{{guest_name}}',   label: 'Guest name' },
+  { tag: '{{checkin}}',      label: 'Check-in date' },
+  { tag: '{{checkout}}',     label: 'Check-out date' },
+  { tag: '{{clean_date}}',   label: 'Clean date' },
+  { tag: '{{cleaner_link}}', label: 'App link' },
+];
+
+function loadEmailTemplate(type) {
+  const saved = loadJSON('gh-email-tpl-' + type);
+  return saved || EMAIL_TEMPLATE_DEFAULTS[type];
+}
+
+function saveEmailTemplate(type) {
+  const subject = document.getElementById('etpl-subject').value;
+  const body    = document.getElementById('etpl-body').value;
+  const color   = document.getElementById('etpl-color').value;
+  const tpl = { subject, body, color };
+  localStorage.setItem('gh-email-tpl-' + type, JSON.stringify(tpl));
+  // Sync reminder template to AppData so Apps Script can use it
+  if (type === 'reminder') scheduleAppDataSave('emailTplReminder', tpl);
+  if (type === 'assignment') scheduleAppDataSave('emailTplAssignment', tpl);
+  const conf = document.getElementById('etpl-save-confirm');
+  if (conf) { conf.style.display = 'block'; setTimeout(() => conf.style.display = 'none', 2000); }
+}
+
+function resetEmailTemplate(type) {
+  const def = EMAIL_TEMPLATE_DEFAULTS[type];
+  document.getElementById('etpl-subject').value = def.subject;
+  document.getElementById('etpl-body').value    = def.body;
+  document.getElementById('etpl-color').value   = def.color;
+  document.getElementById('etpl-color-preview').style.background = def.color;
+}
+
+function insertTemplateVar(tag) {
+  const ta = document.getElementById('etpl-body');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + tag + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + tag.length;
+  ta.focus();
+}
+
+function openEmailTemplatePanel(type) {
+  const tpl = loadEmailTemplate(type);
+  const isAssignment = type === 'assignment';
+  const title = isAssignment ? '📋 Assignment Email' : '⏰ Reminder Email';
+  const desc  = isAssignment ? 'Sent when you assign a clean.' : 'Sent 24 hours before the clean.';
+
+  document.getElementById('email-template-content').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0">
+
+      <!-- EDITOR PANE -->
+      <div style="padding:0">
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div class="card-title" style="margin-bottom:0">${title}</div>
+            <div style="display:flex;gap:6px">
+              <button onclick="resetEmailTemplate('${type}')" style="font-size:11px;background:none;border:1px solid var(--stone);border-radius:20px;padding:4px 10px;cursor:pointer;color:var(--text-soft);font-family:'DM Sans',sans-serif">Reset</button>
+              <button onclick="saveEmailTemplate('${type}')" class="btn-primary" style="font-size:12px;padding:6px 14px">Save</button>
+            </div>
+          </div>
+          <div id="etpl-save-confirm" style="font-size:12px;color:var(--moss);margin-bottom:6px;display:none">✓ Saved</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">${desc}</div>
+
+          <label>Subject</label>
+          <input type="text" id="etpl-subject" value="${(tpl.subject||'').replace(/"/g,'&quot;')}"
+            style="font-size:14px;margin-bottom:10px"
+            oninput="updateEmailPreview('${type}')">
+
+          <label>Accent Colour</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <input type="color" id="etpl-color" value="${tpl.color||'#1E3A2F'}"
+              style="width:44px;height:44px;border:none;border-radius:8px;cursor:pointer;padding:2px;flex-shrink:0"
+              oninput="document.getElementById('etpl-color-preview').style.background=this.value;updateEmailPreview('${type}')">
+            <div id="etpl-color-preview" style="flex:1;height:44px;border-radius:8px;background:${tpl.color||'#1E3A2F'}"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <label style="margin:0">Body</label>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:65%">
+              ${EMAIL_TEMPLATE_VARS.map(v => `<button onclick="insertTemplateVar('${v.tag}')"
+                style="font-size:10px;background:var(--mist);border:1px solid var(--stone);border-radius:20px;padding:3px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--forest);white-space:nowrap">${v.label}</button>`).join('')}
+            </div>
+          </div>
+          <textarea id="etpl-body" rows="7"
+            style="font-size:13px;line-height:1.6;font-family:'DM Sans',sans-serif;resize:vertical;margin-bottom:0"
+            oninput="updateEmailPreview('${type}')">${tpl.body||''}</textarea>
+        </div>
+      </div>
+
+      <!-- PREVIEW PANE -->
+      <div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Preview</div>
+        <div style="border-radius:12px;overflow:hidden;border:1px solid var(--warm);background:white">
+          <div style="background:#e8e8e8;padding:8px 12px;display:flex;align-items:center;gap:6px">
+            <div style="width:10px;height:10px;border-radius:50%;background:#FF5F57"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#FEBC2E"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#28C840"></div>
+            <div style="flex:1;background:white;border-radius:4px;padding:3px 8px;font-size:11px;color:#666;margin-left:4px" id="etpl-preview-subject">Subject preview</div>
+          </div>
+          <div id="etpl-preview-body" style="padding:16px;font-size:13px"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('settings-panel-email-template').dataset.tplType = type;
+  openSettingsPanel('email-template');
+  setTimeout(() => updateEmailPreview(type), 50);
+}
+
+function updateEmailPreview(type) {
+  const subject  = document.getElementById('etpl-subject')?.value || '';
+  const body     = document.getElementById('etpl-body')?.value    || '';
+  const color    = document.getElementById('etpl-color')?.value   || '#1E3A2F';
+
+  // Fill with sample values
+  function fillSample(str) {
+    return str
+      .replace(/{{cleaner_name}}/g, 'Megan')
+      .replace(/{{guest_name}}/g,   'Sarah Johnson')
+      .replace(/{{checkin}}/g,       '14 Jun 2025')
+      .replace(/{{checkout}}/g,      '18 Jun 2025')
+      .replace(/{{clean_date}}/g,    '18 Jun 2025')
+      .replace(/{{cleaner_link}}/g,  '#');
+  }
+
+  const subjectEl = document.getElementById('etpl-preview-subject');
+  if (subjectEl) subjectEl.textContent = fillSample(subject) || 'Subject preview';
+
+  const bodyText = fillSample(body);
+  const bodyHtml = bodyText.split('\n').map(line =>
+    line.trim() === '' ? '<br>' : `<p style="margin:0 0 8px;font-size:13px;line-height:1.5">${line}</p>`
+  ).join('');
+
+  const previewEl = document.getElementById('etpl-preview-body');
+  if (previewEl) previewEl.innerHTML = `
+    <div style="font-family:sans-serif;color:#1a1a1a">
+      <div style="background:${color};padding:16px 20px;border-radius:8px 8px 0 0;margin:-16px -16px 16px">
+        <div style="color:white;font-size:16px;font-weight:700">🏡 Glenhaven</div>
+      </div>
+      ${bodyHtml}
+      <div style="margin-top:16px">
+        <div style="background:${color};color:white;text-align:center;padding:12px;border-radius:8px;font-weight:600;font-size:13px">Open My Cleaner App →</div>
+      </div>
+    </div>`;
+}
+function applyEmailTemplate(type, vars) {
+  const tpl = loadEmailTemplate(type);
+  function fill(str) {
+    return str
+      .replace(/{{cleaner_name}}/g, vars.cleanerName || '')
+      .replace(/{{guest_name}}/g,   vars.guestName   || '')
+      .replace(/{{checkin}}/g,      vars.checkin      || '')
+      .replace(/{{checkout}}/g,     vars.checkout     || '')
+      .replace(/{{clean_date}}/g,   vars.cleanDate    || vars.checkin || '')
+      .replace(/{{cleaner_link}}/g, vars.cleanerLink  || '');
+  }
+  const subject = fill(tpl.subject || EMAIL_TEMPLATE_DEFAULTS[type].subject);
+  const bodyText = fill(tpl.body   || EMAIL_TEMPLATE_DEFAULTS[type].body);
+  const color    = tpl.color || EMAIL_TEMPLATE_DEFAULTS[type].color;
+  // Convert plain text body to HTML (preserve line breaks, make link a button)
+  const bodyHtml = bodyText
+    .split('\n')
+    .map(line => line.trim() === '' ? '<br>' : `<p style="margin:0 0 8px">${line}</p>`)
+    .join('');
+  const html = `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
+    <div style="background:${color};padding:20px 24px;border-radius:10px 10px 0 0">
+      <h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1>
+    </div>
+    <div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">
+      ${bodyHtml}
+      <div style="margin-top:20px">
+        <a href="${vars.cleanerLink||'#'}" style="display:block;background:${color};color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>
+      </div>
+    </div>
+  </div>`;
+  return { subject, html, text: bodyText };
+}
+async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin, checkout, cleanerLink, cleanDate, type }) {
   const scriptUrl = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
   if (!cleanerEmail) return { ok: false, reason: 'no-email' };
-  const firstName = cleanerName.split(' ')[0];
-  const subject = 'New clean assigned — ' + guestName + ' (' + checkin + ')';
-  const html = '<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">'
-    + '<div style="background:#1E3A2F;padding:20px 24px;border-radius:10px 10px 0 0">'
-    + '<h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1></div>'
-    + '<div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">'
-    + '<p style="margin:0 0 16px">Hi ' + firstName + ',</p>'
-    + '<p style="margin:0 0 20px">You\'ve been assigned a new clean at Glenhaven.</p>'
-    + '<div style="background:white;border-radius:8px;padding:16px;border:1px solid #e8e0d8;margin-bottom:20px">'
-    + '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">'
-    + '<span style="color:#666;font-size:14px">Guest</span><span style="font-weight:600;font-size:14px">' + guestName + '</span></div>'
-    + '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">'
-    + '<span style="color:#666;font-size:14px">Check-in</span><span style="font-weight:600;font-size:14px">' + checkin + '</span></div>'
-    + '<div style="display:flex;justify-content:space-between;padding:8px 0">'
-    + '<span style="color:#666;font-size:14px">Check-out</span><span style="font-weight:600;font-size:14px">' + checkout + '</span></div></div>'
-    + '<a href="' + cleanerLink + '" style="display:block;background:#1E3A2F;color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>'
-    + '<p style="margin:16px 0 0;font-size:12px;color:#999;text-align:center">Tap the button to accept or decline this clean.</p>'
-    + '</div></div>';
+  const emailType = type || 'assignment';
+  const { subject, html, text } = applyEmailTemplate(emailType, {
+    cleanerName: cleanerName.split(' ')[0],
+    guestName, checkin, checkout,
+    cleanDate: cleanDate || checkin,
+    cleanerLink
+  });
   try {
     const resp = await fetch(scriptUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'sendEmail', to: cleanerEmail, subject, html, text: 'Hi ' + firstName + ', you have a new clean assigned. Open your app: ' + cleanerLink })
+      body: JSON.stringify({ action: 'sendEmail', to: cleanerEmail, subject, html, text })
     });
     const data = await resp.json();
     return { ok: data.success, data };
@@ -7211,13 +7430,15 @@ async function testCleanerEmail() {
     return;
   }
   const c = cleaners[0];
+  const ownerEmail = localStorage.getItem('gh-owner-email') || localStorage.getItem('gh-invoice-email');
+  const testTo = ownerEmail || c.email;
   const result = await sendCleanerEmail({
-    cleanerName: c.name, cleanerEmail: c.email,
+    cleanerName: c.name, cleanerEmail: testTo,
     guestName: 'Test Guest', checkin: 'Tomorrow', checkout: 'Day after',
     cleanerLink: cleanerLinkForId(c)
   });
   if (resultEl) {
-    if (result.ok) { resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)'; resultEl.textContent = '✓ Test email sent to ' + c.email; }
+    if (result.ok) { resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)'; resultEl.textContent = '✓ Test email sent to ' + testTo; }
     else { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '✕ Failed — check your Apps Script URL is saved and deployed'; }
   }
 }
