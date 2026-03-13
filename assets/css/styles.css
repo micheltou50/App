@@ -464,3 +464,6 @@ body {
   .nav-btn { font-size: 8px; }
   .nav-btn .icon { width: 36px; height: 36px; font-size: 18px; }
 }
+
+/* Ensure hidden sections stay hidden even when combined with layout classes */
+.section-hidden { display:none !important; }
