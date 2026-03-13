@@ -903,23 +903,16 @@
         <div id="notif-result" style="font-size:12px;margin-top:8px;display:none"></div>
       </div>
       <div class="card">
-        <div class="card-title">✉️ Email Notifications via Resend</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Automatically emails your cleaner when you assign a clean — a backup alongside push notifications. Free up to 3,000 emails/month.</div>
-        <div style="padding:10px 12px;background:var(--mist);border-radius:var(--radius-sm);font-size:11px;color:var(--text-soft);line-height:1.6;margin-bottom:12px">
-          <strong>Setup:</strong><br>
-          1. Sign up free at <strong>resend.com</strong><br>
-          2. Create an API key<br>
-          3. Paste it below — add cleaners' emails in Settings → Property → Team
+        <div class="card-title">✉️ Email Notifications</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Automatically emails your cleaner when you assign a clean, and again 24 hours before. Sent via Gmail through your Apps Script — no setup needed beyond adding cleaner emails.</div>
+        <div style="background:var(--mist);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:14px">
+          ✅ Uses your existing Apps Script connection<br>
+          ✅ Sent from your Gmail account<br>
+          ✅ Completely free<br>
+          ⚙️ Add emails to cleaners in <strong>Settings → Property → Team</strong>
         </div>
-        <label>Resend API Key</label>
-        <input type="password" id="resend-api-key" placeholder="re_...">
-        <label>From Email</label>
-        <input type="email" id="resend-from-email" placeholder="e.g. glenhaven@yourdomain.com">
-        <div style="font-size:11px;color:var(--text-soft);margin-top:-6px;margin-bottom:10px">Must be from a domain verified in Resend. Or use <strong>onboarding@resend.dev</strong> to test.</div>
-        <button class="btn-primary" onclick="saveResendSettings()">Save Email Settings</button>
-        <div id="resend-save-confirm" style="font-size:12px;color:var(--moss);margin-top:6px;display:none">✓ Saved</div>
-        <button class="btn-secondary" onclick="testResendEmail()" style="margin-top:8px">✉️ Send Test Email</button>
-        <div id="resend-test-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
+        <button class="btn-secondary" onclick="testCleanerEmail()">✉️ Send Test Email</button>
+        <div id="email-test-result" style="font-size:12px;margin-top:8px;display:none;padding:8px;border-radius:8px"></div>
       </div>
     </div>
 
@@ -2795,10 +2788,6 @@ function openSettingsPanel(panelId) {
   }
   if (panelId === 'notifications') {
     setTimeout(updateNotifStatus, 100);
-    const rk = document.getElementById('resend-api-key');
-    if (rk) rk.value = localStorage.getItem('gh-resend-key') || '';
-    const rf = document.getElementById('resend-from-email');
-    if (rf) rf.value = localStorage.getItem('gh-resend-from') || '';
   }
   if (panelId === 'expense-cats') {
     renderExpenseCatSettings();
@@ -7096,8 +7085,8 @@ async function assignCleanerToBooking(bookingId) {
     console.warn('No push subscription found for cleaner', cleanerObj.id, '— cleaner needs to enable notifications');
   }
 
-  // Send email notification via Resend (fires silently in background)
-  if (cleanerObj.email && localStorage.getItem('gh-resend-key')) {
+  // Send email notification via Gmail/Apps Script (fires silently in background)
+  if (cleanerObj.email) {
     sendCleanerEmail({
       cleanerName: cleanerObj.name,
       cleanerEmail: cleanerObj.email,
@@ -7112,89 +7101,58 @@ async function assignCleanerToBooking(bookingId) {
   }
 }
 
-// ── RESEND EMAIL NOTIFICATIONS ───────────────────────────────────────────────
-function saveResendSettings() {
-  const key = document.getElementById('resend-api-key')?.value.trim();
-  const from = document.getElementById('resend-from-email')?.value.trim();
-  if (key) localStorage.setItem('gh-resend-key', key);
-  if (from) localStorage.setItem('gh-resend-from', from);
-  const el = document.getElementById('resend-save-confirm');
-  if (el) { el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2000); }
-}
-
+// ── EMAIL NOTIFICATIONS VIA GMAIL (Apps Script) ───────────────────────────────
 async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin, checkout, cleanerLink }) {
-  const apiKey = localStorage.getItem('gh-resend-key');
-  const from = localStorage.getItem('gh-resend-from') || 'onboarding@resend.dev';
-  if (!apiKey || !cleanerEmail) return { ok: false, reason: !apiKey ? 'no-key' : 'no-email' };
+  const scriptUrl = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+  if (!cleanerEmail) return { ok: false, reason: 'no-email' };
   const firstName = cleanerName.split(' ')[0];
-  const subject = `New clean assigned — ${guestName} (${checkin})`;
-  const html = `
-    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
-      <div style="background:#1E3A2F;padding:20px 24px;border-radius:10px 10px 0 0">
-        <h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1>
-      </div>
-      <div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">
-        <p style="margin:0 0 16px">Hi ${firstName},</p>
-        <p style="margin:0 0 20px">You've been assigned a new clean at Glenhaven.</p>
-        <div style="background:white;border-radius:8px;padding:16px;border:1px solid #e8e0d8;margin-bottom:20px">
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">
-            <span style="color:#666;font-size:14px">Guest</span>
-            <span style="font-weight:600;font-size:14px">${guestName}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">
-            <span style="color:#666;font-size:14px">Check-in</span>
-            <span style="font-weight:600;font-size:14px">${checkin}</span>
-          </div>
-          <div style="display:flex;justify-content:space-between;padding:8px 0">
-            <span style="color:#666;font-size:14px">Check-out</span>
-            <span style="font-weight:600;font-size:14px">${checkout}</span>
-          </div>
-        </div>
-        <a href="${cleanerLink}" style="display:block;background:#1E3A2F;color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>
-        <p style="margin:16px 0 0;font-size:12px;color:#999;text-align:center">Tap the button above to accept or decline this clean.</p>
-      </div>
-    </div>`;
+  const subject = 'New clean assigned — ' + guestName + ' (' + checkin + ')';
+  const html = '<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">'
+    + '<div style="background:#1E3A2F;padding:20px 24px;border-radius:10px 10px 0 0">'
+    + '<h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1></div>'
+    + '<div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">'
+    + '<p style="margin:0 0 16px">Hi ' + firstName + ',</p>'
+    + '<p style="margin:0 0 20px">You\'ve been assigned a new clean at Glenhaven.</p>'
+    + '<div style="background:white;border-radius:8px;padding:16px;border:1px solid #e8e0d8;margin-bottom:20px">'
+    + '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">'
+    + '<span style="color:#666;font-size:14px">Guest</span><span style="font-weight:600;font-size:14px">' + guestName + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">'
+    + '<span style="color:#666;font-size:14px">Check-in</span><span style="font-weight:600;font-size:14px">' + checkin + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;padding:8px 0">'
+    + '<span style="color:#666;font-size:14px">Check-out</span><span style="font-weight:600;font-size:14px">' + checkout + '</span></div></div>'
+    + '<a href="' + cleanerLink + '" style="display:block;background:#1E3A2F;color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>'
+    + '<p style="margin:16px 0 0;font-size:12px;color:#999;text-align:center">Tap the button to accept or decline this clean.</p>'
+    + '</div></div>';
   try {
-    const resp = await fetch('/.netlify/functions/send-email', {
+    const resp = await fetch(scriptUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey, from, to: cleanerEmail, subject, html })
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'sendEmail', to: cleanerEmail, subject, html, text: 'Hi ' + firstName + ', you have a new clean assigned. Open your app: ' + cleanerLink })
     });
     const data = await resp.json();
-    return { ok: resp.ok, data };
+    return { ok: data.success, data };
   } catch(e) {
     return { ok: false, reason: e.message };
   }
 }
 
-async function testResendEmail() {
-  const resultEl = document.getElementById('resend-test-result');
-  if (resultEl) { resultEl.style.display = 'block'; resultEl.style.background = 'var(--warm)'; resultEl.textContent = 'Sending test…'; }
-  const apiKey = localStorage.getItem('gh-resend-key');
-  const from = localStorage.getItem('gh-resend-from') || 'onboarding@resend.dev';
-  if (!apiKey) {
-    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Save your Resend API key first'; }
-    return;
-  }
+async function testCleanerEmail() {
+  const resultEl = document.getElementById('email-test-result');
+  if (resultEl) { resultEl.style.display = 'block'; resultEl.style.background = 'var(--warm)'; resultEl.style.color = 'var(--text-soft)'; resultEl.textContent = 'Sending…'; }
   const cleaners = loadCleaners().filter(c => c.email);
-  const testTo = cleaners[0]?.email;
-  if (!testTo) {
-    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Add an email to at least one team member first'; }
+  if (!cleaners.length) {
+    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Add an email to at least one team member first (Settings → Property → Team)'; }
     return;
   }
+  const c = cleaners[0];
   const result = await sendCleanerEmail({
-    cleanerName: cleaners[0].name, cleanerEmail: testTo,
+    cleanerName: c.name, cleanerEmail: c.email,
     guestName: 'Test Guest', checkin: 'Tomorrow', checkout: 'Day after',
-    cleanerLink: window.location.href
+    cleanerLink: cleanerLinkForId(c)
   });
   if (resultEl) {
-    if (result.ok) {
-      resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)';
-      resultEl.textContent = `✓ Test email sent to ${testTo}`;
-    } else {
-      resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)';
-      resultEl.textContent = '✕ Failed — check your API key and from address';
-    }
+    if (result.ok) { resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)'; resultEl.textContent = '✓ Test email sent to ' + c.email; }
+    else { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '✕ Failed — check your Apps Script URL is saved and deployed'; }
   }
 }
 
