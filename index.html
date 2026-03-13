@@ -1113,7 +1113,11 @@
           <div id="push-appdata-result" style="display:none;margin-top:8px;font-size:12px;padding:8px;border-radius:8px"></div>
           <button class="btn-secondary" onclick="chooseGoogleAccount()" style="margin-top:8px;margin-bottom:6px">① Sign in / Switch Account</button>
           <button class="btn-primary" onclick="syncToSheet()" style="background:var(--amber)">② Push All Bookings</button>
-          <div id="push-sync-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:6px">Debug</div>
+          <button class="btn-secondary" onclick="debugCSVColumns()" style="font-size:12px">🔍 Show CSV Column Layout</button>
+          <div id="csv-debug-result" style="display:none;margin-top:8px;font-size:11px;font-family:monospace;background:#f4f4f4;padding:10px;border-radius:8px;word-break:break-all;line-height:1.8"></div>
+        </div>
         </div>
       </div>
       <div class="card" style="margin-bottom:10px">
@@ -1785,8 +1789,35 @@ async function syncFromSheets(manual = false) {
     const csv = await res.text();
     const lines = csv.trim().split('\n').filter(l => l.trim());
     if (lines.length < 2) throw new Error('Sheet returned no data rows');
-    // Debug: log first data row so date format is visible in console
-    if (lines.length > 1) {}
+    // Temporary debug — store header layout for display
+    const headerCols = parseCSVLine(lines[0]);
+    window._csvDebug = 'HEADERS:\n' + headerCols.map((h,i) => `[${i}] col ${String.fromCharCode(65+i)}: "${h}"`).join('\n');
+    console.log('[CSV Debug]', window._csvDebug);
+
+    // Parse header row to find column indices dynamically
+    const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+    const col = {
+      checkin:          headers.indexOf('check-in date') >= 0 ? headers.indexOf('check-in date') : 0,
+      nights:           1,
+      checkout:         headers.indexOf('check-out date') >= 0 ? headers.indexOf('check-out date') : 2,
+      name:             3,
+      guests:           4,
+      hostPayout:       5,
+      cleaningFee:      6,
+      mgmt:             7,
+      mgmtPayout:       8,
+      netPayout:        9,
+      cleanerConfirmed: 10,
+      platform:         headers.findIndex(h => h.includes('platform')),
+      confirmCode:      headers.findIndex(h => h.includes('confirmation') || h.includes('confirm')),
+      status:           headers.findIndex(h => h.includes('status')),
+    };
+    // Fall back to positional defaults if headers not recognised
+    if (col.platform < 0)     col.platform = 11;
+    if (col.confirmCode < 0)  col.confirmCode = 12;
+    if (col.status < 0)       col.status = 13;
+    console.log('[CSV] Column map:', col);
+    window._csvDebug += '\n\nDETECTED COLUMNS:\n' + Object.entries(col).map(([k,v]) => `${k}: [${v}] = "${headers[v] || 'n/a'}"`).join('\n');
 
     const imported = [];
     let skipped = 0;
@@ -1794,34 +1825,32 @@ async function syncFromSheets(manual = false) {
       if (i === 0) return;
       const p = parseCSVLine(line);
       if (!p[0] && !p[3]) return; // skip empty rows
-      const name = String(p[3] || '').trim();
-      const checkin = toISO(String(p[0] || '').trim());
-      if (!name || !checkin) { skipped++; return; } // skip rows with no name or date
+      const name = String(p[col.name] || '').trim();
+      const checkin = toISO(String(p[col.checkin] || '').trim());
+      if (!name || !checkin) { skipped++; return; }
 
-      const checkout = toISO(String(p[2] || '').trim());
-      const nights = Number(p[1]) || 1;
-      const hostPayout = toNum(p[5]);
-      const cleaningFee = toNum(p[6]);
-      const mgmtRaw = String(p[7] || '').trim();
-      // Sheet column H can be: "0.1" (decimal fraction), "10" (plain percent), "10%" (percent string)
-      // We store mgmtFeeRaw as the plain % number (e.g. 10) and mgmtDecimal as fraction (e.g. 0.10)
+      const checkout = toISO(String(p[col.checkout] || '').trim());
+      const nights = Number(p[col.nights]) || 1;
+      const hostPayout = toNum(p[col.hostPayout]);
+      const cleaningFee = toNum(p[col.cleaningFee]);
+      const mgmtRaw = String(p[col.mgmt] || '').trim();
       let mgmtDecimal = 0;
       if (mgmtRaw.includes('%')) {
-        mgmtDecimal = toNum(mgmtRaw) / 100;          // "10%" → 0.10
+        mgmtDecimal = toNum(mgmtRaw) / 100;
       } else {
         const n = toNum(mgmtRaw);
-        mgmtDecimal = n > 1 ? n / 100 : n;           // "10" → 0.10 | "0.10" → 0.10
+        mgmtDecimal = n > 1 ? n / 100 : n;
       }
-      const mgmtFeeRaw = Math.round(mgmtDecimal * 100 * 10) / 10; // fraction → plain % e.g. 10
+      const mgmtFeeRaw = Math.round(mgmtDecimal * 100 * 10) / 10;
       const mgmtFee = Math.round(hostPayout * mgmtDecimal * 100) / 100;
-      const mgmtPayout = toNum(p[8]);
-      const netPayout = toNum(p[9]) || Math.round((hostPayout - cleaningFee - mgmtFee) * 100) / 100;
-      const cleanerConfirmed = ['yes','true','1','TRUE'].includes(String(p[10] || '').trim());
-      const platform = String(p[11] || '').trim();
-      const confirmCode = String(p[12] || '').trim();
-      const sheetStatus = String(p[13] || '').trim().toLowerCase().replace(/\s+/g, '');
-      if (i <= 3) console.log('[Sync] Row', i, '— cols:', p.length, '| p[13]=', JSON.stringify(p[13]), '| sheetStatus=', sheetStatus);
+      const mgmtPayout = toNum(p[col.mgmtPayout]);
+      const netPayout = toNum(p[col.netPayout]) || Math.round((hostPayout - cleaningFee - mgmtFee) * 100) / 100;
+      const cleanerConfirmed = ['yes','true','1','TRUE'].includes(String(p[col.cleanerConfirmed] || '').trim());
+      const platform = String(p[col.platform] || '').trim();
+      const confirmCode = String(p[col.confirmCode] || '').trim();
+      const sheetStatus = String(p[col.status] || '').trim().toLowerCase().replace(/\s+/g, '');
       const isCancelled = sheetStatus.includes('cancel');
+      console.log(`[CSV Row ${i}] name="${name}" status_col=[${col.status}] raw="${p[col.status]}" isCancelled:${isCancelled}`);
 
       // Preserve local data by matching on name+checkin (more reliable than name alone)
       const existingB = bookings.find(b => 
@@ -1830,15 +1859,15 @@ async function syncFromSheets(manual = false) {
       );
       const finalMgmtFeeRaw = mgmtFeeRaw || (existingB ? existingB.mgmtFeeRaw : 0);
       imported.push({
-        id: existingB ? existingB.id : (i * 1000 + 1),  // preserve internal ID
+        id: existingB ? existingB.id : (i * 1000 + 1),
         checkin, checkout, nights, name,
-        guests: Number(p[4]) || 1,
+        guests: Number(p[col.guests]) || 1,
         hostPayout, cleaningFee, mgmtFee, mgmtFeeRaw: finalMgmtFeeRaw, mgmtPayout, netPayout,
         cleanerConfirmed,
         platform,
         confirmCode,
         status: isCancelled ? 'cancelled' : getStatus(checkin),
-        gcalEventId: existingB ? (existingB.gcalEventId || null) : null, // only lives locally
+        gcalEventId: existingB ? (existingB.gcalEventId || null) : null,
         _fromSheet: true
       });
     });
@@ -7137,6 +7166,31 @@ async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin,
     return { ok: data.success, data };
   } catch(e) {
     return { ok: false, reason: e.message };
+  }
+}
+
+async function debugCSVColumns() {
+  const el = document.getElementById('csv-debug-result');
+  el.style.display = 'block';
+  if (window._csvDebug) {
+    el.textContent = window._csvDebug;
+    return;
+  }
+  el.textContent = 'Fetching…';
+  try {
+    const res = await fetch(SHEET_URL + '&t=' + Date.now());
+    const csv = await res.text();
+    const lines = csv.trim().split('\n').filter(l => l.trim());
+    const headers = parseCSVLine(lines[0]);
+    const firstRow = lines.length > 1 ? parseCSVLine(lines[1]) : [];
+    let out = 'HEADERS:\n';
+    headers.forEach((h, i) => { out += `[${i}] col ${String.fromCharCode(65+i)}: "${h}"\n`; });
+    out += '\nFIRST DATA ROW:\n';
+    firstRow.forEach((v, i) => { out += `[${i}]: ${JSON.stringify(v)}\n`; });
+    el.textContent = out;
+    window._csvDebug = out;
+  } catch(e) {
+    el.textContent = 'Error: ' + e.message;
   }
 }
 
