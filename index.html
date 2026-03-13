@@ -2048,12 +2048,12 @@ function renderAll() {
 }
 
 function renderDashboard() {
-  document.getElementById('stat-bookings').textContent = bookings.length;
+  document.getElementById('stat-bookings').textContent = bookings.filter(b => b.status !== 'cancelled').length;
   renderCalendar();
   updateCalStats();
 
   const now = new Date();
-  const upcoming = [...bookings].filter(b => new Date(b.checkin) >= now).sort((a,b) => new Date(a.checkin)-new Date(b.checkin));
+  const upcoming = [...bookings].filter(b => b.status !== 'cancelled' && new Date(b.checkin) >= now).sort((a,b) => new Date(a.checkin)-new Date(b.checkin));
   const nc = document.getElementById('next-checkin-content');
   if (upcoming.length > 0) {
     const b = upcoming[0];
@@ -2126,14 +2126,14 @@ function calNext() { calMonth++; if (calMonth>11){calMonth=0;calYear++;} renderC
 function updateCalStats() {
   const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
   let bookedDays = 0;
-  bookings.forEach(b => {
+  bookings.filter(b => b.status !== 'cancelled').forEach(b => {
     const ci = new Date(b.checkin), co = new Date(b.checkout);
     for (let d = new Date(ci); d < co; d.setDate(d.getDate()+1))
       if (d.getMonth()===calMonth && d.getFullYear()===calYear) bookedDays++;
   });
   const monthRev = bookings.filter(b => {
     const d = new Date(b.checkin);
-    return d.getMonth()===calMonth && d.getFullYear()===calYear;
+    return b.status !== 'cancelled' && d.getMonth()===calMonth && d.getFullYear()===calYear;
   }).reduce((s,b) => s+Number(b.hostPayout||0), 0);
   const occ = Math.round((bookedDays/daysInMonth)*100);
   document.getElementById('stat-occupancy').textContent = occ + '%';
@@ -2400,7 +2400,7 @@ function renderReport() {
 
   // Helper: bookings in a given month
   function monthBookings(year, month) {
-    return bookings.filter(b => { const d = new Date(b.checkin); return d.getFullYear()===year && d.getMonth()===month; });
+    return bookings.filter(b => b.status !== 'cancelled' && (function(){ const d = new Date(b.checkin); return d.getFullYear()===year && d.getMonth()===month; })());
   }
   // Helper: expenses in FY — use live array, not stale localStorage read
   function fyExpenses() {
@@ -2567,9 +2567,8 @@ function renderRevenue() {
   document.getElementById('rev-month-title').textContent = months[revMonth] + ' ' + revYear;
   const monthBookings = bookings.filter(b => {
     const d = new Date(b.checkin);
-    return d.getMonth()===revMonth && d.getFullYear()===revYear;
+    return b.status !== 'cancelled' && d.getMonth()===revMonth && d.getFullYear()===revYear;
   });
-  const totalHost = monthBookings.reduce((s,b)=>s+Number(b.hostPayout||0),0);
   const totalCleaning = monthBookings.reduce((s,b)=>s+Number(b.cleaningFee||0),0);
   const totalMgmt = monthBookings.reduce((s,b)=>s+Number(b.mgmtFee||0),0);
   // Net = (hostPayout - cleaningFee) * mgmtFee% — but mgmtFee is already the dollar amount
@@ -2601,9 +2600,8 @@ function renderManagement() {
   document.getElementById('mgmt-month-title').textContent = monthNames[mgmtMonth] + ' ' + mgmtYear;
   const monthBookings = bookings.filter(b => {
     const d = new Date(b.checkin);
-    return d.getMonth()===mgmtMonth && d.getFullYear()===mgmtYear;
+    return b.status !== 'cancelled' && d.getMonth()===mgmtMonth && d.getFullYear()===mgmtYear;
   });
-  const totalMgmtPayout = monthBookings.reduce((s,b)=>s+Number(b.mgmtPayout||0),0);
   document.getElementById('total-mgmt').textContent = '$' + totalMgmtPayout.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
   document.getElementById('mgmt-sub').textContent = monthBookings.length + ' booking' + (monthBookings.length!==1?'s':'');
   document.getElementById('mgmt-breakdown').innerHTML = monthBookings.length ? [...monthBookings].sort((a,b)=>new Date(a.checkin)-new Date(b.checkin)).map(b=>{
@@ -2970,11 +2968,11 @@ async function getSmartPricing() {
   status.textContent = '⟳ Analysing your bookings and seasonal data...';
 
   const now = new Date();
-  const history = bookings.map(b => ({
+  const history = bookings.filter(b => b.status !== 'cancelled').map(b => ({
     checkin: b.checkin, checkout: b.checkout, nights: b.nights,
     guests: b.guests, payout: b.hostPayout, platform: b.platform
   }));
-  const totalRevenue = bookings.reduce((s,b) => s + (b.hostPayout||0), 0);
+  const totalRevenue = bookings.filter(b => b.status !== 'cancelled').reduce((s,b) => s + (b.hostPayout||0), 0);
   const avgPayout = history.length ? Math.round(totalRevenue / history.length) : 0;
 
   // Build date range — either next N days or a specific calendar month
@@ -7353,7 +7351,7 @@ function exportReportPDF() {
   const months = fyMonths(reportFY);
   const fmt2 = n => '$' + Number(n).toLocaleString('en-AU',{minimumFractionDigits:0,maximumFractionDigits:0});
   function mdata(yr, mo) {
-    const bs = bookings.filter(b => { const d=new Date(b.checkin); return d.getFullYear()===yr&&d.getMonth()===mo; });
+    const bs = bookings.filter(b => b.status !== 'cancelled' && (function(){ const d=new Date(b.checkin); return d.getFullYear()===yr&&d.getMonth()===mo; })());
     const avail = new Date(yr,mo+1,0).getDate();
     const booked = bs.reduce((s,b)=>s+Number(b.nights||0),0);
     const rev = bs.reduce((s,b)=>s+Number(b.hostPayout||0),0);
