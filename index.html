@@ -2148,7 +2148,7 @@ function renderCalendar() {
 
   // Tag each day: start = checkin, end = checkout, mid = in between
   const starts = new Set(), ends = new Set(), mids = new Set();
-  bookings.forEach(b => {
+  bookings.filter(b => b.status !== 'cancelled').forEach(b => {
     if (!b.checkin || !b.checkout) return;
     const ci = new Date(b.checkin), co = new Date(b.checkout);
     for (let d = new Date(ci); d <= co; d.setDate(d.getDate() + 1)) {
