@@ -7193,6 +7193,84 @@ Tap the button below to open your app.`,
   }
 };
 
+const EMAIL_TEMPLATE_PRESETS = {
+  assignment: [
+    {
+      label: 'Friendly',
+      subject: 'New clean at Glenhaven — {{checkin}}',
+      body: `Hi {{cleaner_name}},
+
+You've been booked for a clean at Glenhaven! Here are the details:
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Please tap the button below to confirm you can make it.
+
+Thanks so much! 🙏`,
+      color: '#1E3A2F'
+    },
+    {
+      label: 'Professional',
+      subject: 'Clean assigned: {{guest_name}} checks out {{checkout}}',
+      body: `Hi {{cleaner_name}},
+
+A new clean has been assigned to you at Glenhaven.
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Open your app to accept or decline.`,
+      color: '#1E3A2F'
+    }
+  ],
+  reminder: [
+    {
+      label: 'Warm',
+      subject: '⏰ Tomorrow\'s clean — {{guest_name}}',
+      body: `Hi {{cleaner_name}},
+
+Just a heads up — you have a clean tomorrow at Glenhaven after {{guest_name}} checks out.
+
+Date: {{clean_date}}
+
+Everything you need is in your app. See you there! 🏡`,
+      color: '#E65100'
+    },
+    {
+      label: 'Minimal',
+      subject: 'Reminder: Glenhaven clean tomorrow',
+      body: `Hi {{cleaner_name}},
+
+Quick reminder that your clean at Glenhaven is tomorrow.
+
+Guest: {{guest_name}}
+Date: {{clean_date}}
+
+Tap below to open your app.`,
+      color: '#E65100'
+    }
+  ]
+};
+
+function applyPreset(type, idx) {
+  const preset = EMAIL_TEMPLATE_PRESETS[type][idx];
+  if (!preset) return;
+  document.getElementById('etpl-subject').value = preset.subject;
+  document.getElementById('etpl-body').value    = preset.body;
+  document.getElementById('etpl-color').value   = preset.color;
+  document.getElementById('etpl-color-preview').style.background = preset.color;
+  // Highlight selected preset
+  document.querySelectorAll('.etpl-preset-btn').forEach((b, i) => {
+    b.style.background    = i === idx ? 'var(--forest)' : 'var(--mist)';
+    b.style.color         = i === idx ? 'white' : 'var(--forest)';
+    b.style.borderColor   = i === idx ? 'var(--forest)' : 'var(--stone)';
+  });
+  updateEmailPreview(type);
+}
+
 const EMAIL_TEMPLATE_VARS = [
   { tag: '{{cleaner_name}}', label: 'Cleaner name' },
   { tag: '{{guest_name}}',   label: 'Guest name' },
@@ -7258,6 +7336,12 @@ function openEmailTemplatePanel(type) {
           </div>
           <div id="etpl-save-confirm" style="font-size:12px;color:var(--moss);margin-bottom:6px;display:none">✓ Saved</div>
           <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">${desc}</div>
+
+          <label>Presets</label>
+          <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+            ${(EMAIL_TEMPLATE_PRESETS[type]||[]).map((p,i) => `<button class="etpl-preset-btn" onclick="applyPreset('${type}',${i})"
+              style="font-size:12px;background:var(--mist);border:1px solid var(--stone);border-radius:20px;padding:6px 14px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--forest);font-weight:500">${p.label}</button>`).join('')}
+          </div>
 
           <label>Subject</label>
           <input type="text" id="etpl-subject" value="${(tpl.subject||'').replace(/"/g,'&quot;')}"
