@@ -339,7 +339,8 @@
         <div style="font-size:11px;color:var(--stone);margin-top:2px;letter-spacing:0.5px;text-transform:uppercase" class="header-sub-name">Cleaner View</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-        <button onclick="cleanerSignOut()" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:7px 14px;cursor:pointer">Sign Out</button>
+        <button onclick="cleanerSignOut()" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;padding:6px 12px;cursor:pointer">Sign Out</button>
+        <button onclick="cleanerRefresh()" id="cleaner-refresh-btn" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:6px 12px;cursor:pointer">↻ Refresh</button>
         <button onclick="enableCleanerNotifications()" id="cleaner-notif-btn" style="background:rgba(255,255,255,0.12);border:none;border-radius:20px;color:rgba(255,255,255,0.7);font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:6px 12px;cursor:pointer">🔔 Enable Notifications</button>
       </div>
     </div>
@@ -351,8 +352,22 @@
   </div>
   <!-- Content -->
   <div class="cleaner-content">
-    <div id="cleaner-cleans-view"></div>
-    <div id="cleaner-inventory-view" style="display:none"></div>
+    <div id="cleaner-cleans-view">
+      <!-- Sub-tabs for cleans -->
+      <div style="display:flex;gap:0;border-bottom:2px solid var(--warm);margin-bottom:12px">
+        <button id="csubtab-new" onclick="switchCleanerCleanTab('new')" style="flex:1;background:none;border:none;padding:12px 8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;color:var(--forest);border-bottom:2px solid var(--forest);margin-bottom:-2px;cursor:pointer">New <span id="csubtab-new-badge"></span></button>
+        <button id="csubtab-upcoming" onclick="switchCleanerCleanTab('upcoming')" style="flex:1;background:none;border:none;padding:12px 8px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;color:var(--text-soft);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer">Upcoming</button>
+      </div>
+      <div id="cleaner-cleans-new"></div>
+      <div id="cleaner-cleans-upcoming" style="display:none"></div>
+    </div>
+    <div id="cleaner-inventory-view" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-family:'DM Serif Display',serif;font-size:16px;color:var(--forest)">Inventory</div>
+        <button onclick="cleanerAddInventoryItem()" style="background:var(--forest);color:white;border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">+ Add Item</button>
+      </div>
+      <div id="cleaner-inventory-list"></div>
+    </div>
   </div>
 </div>
 
@@ -6106,18 +6121,21 @@ document.addEventListener('visibilitychange', () => {
       _lastVisibilitySync = now;
       syncFromSheets(); // silent background sync
     }
+    // Always pull AppData on focus to get latest cleaner states
+    if (!isCleanerMode()) pullAppData();
   }
 });
 window.addEventListener('pageshow', (e) => { if (e.persisted) syncFromSheets(); });
 
 // Auto-refresh cleaner app when it comes back into focus or on interval
 if (isCleanerMode()) {
-  // Refresh on focus (e.g. returning from background)
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) pullAppData();
   });
-  // Also refresh every 60 seconds while open
   setInterval(() => { if (!document.hidden) pullAppData(); }, 60000);
+} else {
+  // Owner app — pull AppData every 30 seconds to catch cleaner updates
+  setInterval(() => { if (!document.hidden) pullAppData(); }, 30000);
 }
 
 // ── FEEL & GESTURES ───────────────────────────────────────────────────────────
@@ -6392,6 +6410,14 @@ function verifyCleanerPin() {
     cleanerPinEntry = ''; setTimeout(updatePinDots, 200);
   }
 }
+async function cleanerRefresh() {
+  const btn = document.getElementById('cleaner-refresh-btn');
+  if (btn) { btn.textContent = '↻ …'; btn.disabled = true; }
+  await pullAppData();
+  if (btn) { btn.textContent = '↻ Refresh'; btn.disabled = false; }
+  showBanner('✓ Updated', 'ok');
+}
+
 async function enableCleanerNotifications() {
   const { id } = getCleanerParams();
   const btn = document.getElementById('cleaner-notif-btn');
@@ -6441,31 +6467,42 @@ function switchCleanerTab(tab) {
 }
 
 // ── CLEANER CLEANS VIEW ───────────────────────────────────────────────────────
+let cleanerCleanTab = 'new';
+
+function switchCleanerCleanTab(tab) {
+  cleanerCleanTab = tab;
+  ['new','upcoming'].forEach(t => {
+    const btn = document.getElementById('csubtab-' + t);
+    const el = document.getElementById('cleaner-cleans-' + t);
+    if (btn) {
+      btn.style.color = t === tab ? 'var(--forest)' : 'var(--text-soft)';
+      btn.style.fontWeight = t === tab ? '700' : '600';
+      btn.style.borderBottomColor = t === tab ? 'var(--forest)' : 'transparent';
+    }
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+}
+
 function renderCleanerCleans() {
-  const el = document.getElementById('cleaner-cleans-view');
   const cleaner = getActiveCleaner();
   const today = new Date().toISOString().split('T')[0];
   const twoDaysAgo = new Date(Date.now() - 2*24*60*60*1000).toISOString().split('T')[0];
   const perm = (cleaner && cleaner.permissions) ? cleaner.permissions : {};
 
-  // Filter cleans assigned to this cleaner (by id or name fallback)
   const relevant = cleans.filter(c => {
+    if (c.done) return false;
     if (c.date < twoDaysAgo) return false;
     if (cleaner) {
       return (c.cleanerId && String(c.cleanerId) === String(cleaner.id)) ||
              (!c.cleanerId && c.cleaner && c.cleaner === cleaner.name);
     }
-    return true; // fallback: show all if no cleaner found
+    return true;
   }).sort((a,b) => a.date.localeCompare(b.date));
 
-  if (!relevant.length) {
-    el.innerHTML = `<div style="text-align:center;padding:48px 16px">
-      <div style="font-size:48px;margin-bottom:12px">✨</div>
-      <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--forest);margin-bottom:6px">All clear!</div>
-      <div style="font-size:13px;color:var(--text-soft)">No upcoming cleans assigned to you</div>
-    </div>`;
-    return;
-  }
+  // Badge on New tab
+  const newCount = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined).length;
+  const badge = document.getElementById('csubtab-new-badge');
+  if (badge) badge.innerHTML = newCount > 0 ? `<span style="background:var(--red);color:white;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:4px">${newCount}</span>` : '';
 
   const daysUntil = d => {
     const diff = (new Date(d) - new Date(today)) / 86400000;
@@ -6475,37 +6512,27 @@ function renderCleanerCleans() {
     return Math.ceil(diff) + ' days away';
   };
 
-  el.innerHTML = relevant.map(c => {
+  function buildCard(c) {
     const booking = bookings.find(b => b.id === c.bookingId || b.name === c.guestName);
     const checkinStr = booking ? fmt(booking.checkin) : '—';
     const checkoutStr = booking ? fmt(booking.checkout) : fmt(c.date);
     const isToday = c.date === today;
-    const isDone = c.done;
-    const isAccepted = c.cleanerConfirmed && !c.done;
-    const isDeclined = c.cleanerDeclined;
-
-    // Apply permissions
-    const showFirstName  = perm.firstName  && booking;
-    const showFullName   = perm.fullName   && booking;
-    const showGuests     = perm.guests     && booking;
-    const showNotes      = perm.notes;
-    const showPayout     = perm.payout     && booking;
-
-    const nameDisplay = showFullName ? booking.name : showFirstName ? (booking.name||'').split(' ')[0] : null;
-
+    const showFirstName = perm.firstName && booking;
+    const showFullName  = perm.fullName  && booking;
+    const showGuests    = perm.guests    && booking;
+    const showNotes     = perm.notes;
+    const showPayout    = perm.payout    && booking;
+    const nameDisplay   = showFullName ? booking.name : showFirstName ? (booking.name||'').split(' ')[0] : null;
     const urgency = daysUntil(c.date);
 
-    return `
-    <div class="clean-job-card ${isDone ? 'done' : isToday ? 'urgent' : ''}">
+    return `<div class="clean-job-card ${isToday ? 'urgent' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
         <div>
-          <div style="font-family:'DM Serif Display',serif;font-size:17px;color:var(--forest)">${isDone ? '✅ Done' : isAccepted ? '✅ Accepted' : urgency || 'Upcoming'}</div>
+          <div style="font-family:'DM Serif Display',serif;font-size:17px;color:var(--forest)">${urgency || 'Upcoming'}</div>
           <div style="font-size:12px;color:var(--text-soft);margin-top:2px">${c.date ? fmt(c.date) : '—'}</div>
           ${nameDisplay ? `<div style="font-size:13px;font-weight:600;color:var(--text);margin-top:4px">👤 ${nameDisplay}</div>` : ''}
         </div>
-        ${isDone ? '<div style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:4px 10px;border-radius:20px">Completed</div>'
-                 : isAccepted ? '<div style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:4px 10px;border-radius:20px">Accepted ✓</div>'
-                 : isToday ? '<div style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:4px 10px;border-radius:20px">Today!</div>' : ''}
+        ${isToday ? '<div style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:4px 10px;border-radius:20px">Today!</div>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:${showGuests ? '1fr 1fr 1fr' : '1fr 1fr'};gap:8px;margin-bottom:12px">
         <div style="background:var(--mist);border-radius:8px;padding:8px 10px">
@@ -6523,21 +6550,54 @@ function renderCleanerCleans() {
       </div>
       ${showPayout ? `<div style="background:#EDF7ED;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:13px;color:var(--forest);font-weight:600">💰 Cleaning fee: $${Number(booking.cleaningFee||0).toLocaleString()}</div>` : ''}
       ${showNotes && c.notes ? `<div style="background:var(--mist);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--text-soft)">📝 ${c.notes}</div>` : ''}
-      ${isDone ? '' : c.cleanerDeclined ? `
-        <div style="background:#FDECEA;border-radius:8px;padding:10px 12px;text-align:center;font-size:13px;color:var(--red);font-weight:600">❌ You declined this clean</div>` :
-        c.cleanerConfirmed ? `
-        <button onclick="cleanerMarkDone('${c.id}')" style="width:100%;background:var(--forest);color:white;border:none;border-radius:var(--radius-sm);padding:13px;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✓ Mark as Complete</button>` : `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      BUTTONS_PLACEHOLDER
+    </div>`;
+  }
+
+  // NEW tab — pending (not yet accepted or declined)
+  const newEl = document.getElementById('cleaner-cleans-new');
+  const newCleans = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined);
+  if (newEl) {
+    if (!newCleans.length) {
+      newEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
+        <div style="font-size:48px;margin-bottom:12px">✨</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--forest);margin-bottom:6px">Nothing new!</div>
+        <div style="font-size:13px;color:var(--text-soft)">New assignments will appear here</div>
+      </div>`;
+    } else {
+      newEl.innerHTML = newCleans.map(c => {
+        const buttons = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <button onclick="cleanerDecline('${c.id}')" style="background:#FDECEA;color:var(--red);border:none;border-radius:var(--radius-sm);padding:13px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✗ Decline</button>
           <button onclick="cleanerAccept('${c.id}')" style="background:var(--forest);color:white;border:none;border-radius:var(--radius-sm);padding:13px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✓ Accept</button>
-        </div>`}
-    </div>`;
-  }).join('');
+        </div>`;
+        return buildCard(c).replace('BUTTONS_PLACEHOLDER', buttons);
+      }).join('');
+    }
+  }
+
+  // UPCOMING tab — accepted cleans
+  const upcomingEl = document.getElementById('cleaner-cleans-upcoming');
+  const upcomingCleans = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined);
+  if (upcomingEl) {
+    if (!upcomingCleans.length) {
+      upcomingEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
+        <div style="font-size:48px;margin-bottom:12px">🗓</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:18px;color:var(--forest);margin-bottom:6px">No upcoming cleans</div>
+        <div style="font-size:13px;color:var(--text-soft)">Cleans you've accepted will appear here</div>
+      </div>`;
+    } else {
+      upcomingEl.innerHTML = upcomingCleans.map(c => {
+        const buttons = `<button onclick="cleanerMarkDone('${c.id}')" style="width:100%;background:var(--forest);color:white;border:none;border-radius:var(--radius-sm);padding:13px;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">✓ Mark as Complete</button>`;
+        return buildCard(c).replace('BUTTONS_PLACEHOLDER', buttons);
+      }).join('');
+    }
+  }
 }
 
 // ── CLEANER INVENTORY VIEW ────────────────────────────────────────────────────
 function renderCleanerInventory() {
-  const el = document.getElementById('cleaner-inventory-view');
+  const el = document.getElementById('cleaner-inventory-list');
+  if (!el) return;
   const lowItems = inventory.filter(i => i.stock <= i.threshold);
   let html = '';
   if (lowItems.length) {
@@ -6566,6 +6626,31 @@ function renderCleanerInventory() {
   }
   el.innerHTML = html;
 }
+async function cleanerAddInventoryItem() {
+  const name = await showAppModal({
+    title: '+ Add Inventory Item',
+    msg: 'Enter the item name:',
+    hasInput: true,
+    inputPlaceholder: 'e.g. Toilet paper',
+    inputType: 'text',
+    confirmText: 'Add',
+    cancelText: 'Cancel'
+  });
+  if (!name || !name.trim()) return;
+  const newItem = {
+    id: Date.now(),
+    name: name.trim(),
+    stock: 0,
+    threshold: 2,
+    unit: ''
+  };
+  inventory.push(newItem);
+  savePropertyData();
+  scheduleAppDataSave('inventory', inventory);
+  renderCleanerInventory();
+  showBanner('✓ Item added', 'ok');
+}
+
 function cleanerAdjustStock(id, delta) {
   const item = inventory.find(i => i.id === id);
   if (!item) return;
