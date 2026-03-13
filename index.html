@@ -1819,7 +1819,9 @@ async function syncFromSheets(manual = false) {
       const cleanerConfirmed = ['yes','true','1','TRUE'].includes(String(p[10] || '').trim());
       const platform = String(p[11] || '').trim();
       const confirmCode = String(p[12] || '').trim();
-      const sheetStatus = String(p[13] || '').trim().toLowerCase();
+      const sheetStatus = String(p[13] || '').trim().toLowerCase().replace(/\s+/g, '');
+      if (i <= 3) console.log('[Sync] Row', i, '— cols:', p.length, '| p[13]=', JSON.stringify(p[13]), '| sheetStatus=', sheetStatus);
+      const isCancelled = sheetStatus.includes('cancel');
 
       // Preserve local data by matching on name+checkin (more reliable than name alone)
       const existingB = bookings.find(b => 
@@ -1835,7 +1837,7 @@ async function syncFromSheets(manual = false) {
         cleanerConfirmed,
         platform,
         confirmCode,
-        status: (sheetStatus === 'cancelled' || sheetStatus === 'canceled') ? 'cancelled' : getStatus(checkin),
+        status: isCancelled ? 'cancelled' : getStatus(checkin),
         gcalEventId: existingB ? (existingB.gcalEventId || null) : null, // only lives locally
         _fromSheet: true
       });
@@ -1922,7 +1924,8 @@ function finishSync(imported, skipped, manual) {
   localStorage.setItem('gh-last-sync', syncTime);
   renderAll();
   const calMsg = toDeleteFromCal.length ? ` · ${toDeleteFromCal.length} calendar event${toDeleteFromCal.length > 1 ? 's' : ''} removed` : '';
-  showBanner('✓ Synced — ' + bookings.length + ' bookings (sheet: ' + imported.length + ')' + (skipped ? ` (${skipped} rows skipped)` : '') + calMsg, 'ok');
+  const cancelledCount = imported.filter(b => b.status === 'cancelled').length;
+  showBanner('✓ Synced — ' + bookings.length + ' bookings' + (cancelledCount ? ` · ${cancelledCount} cancelled` : '') + (skipped ? ` (${skipped} skipped)` : '') + calMsg, 'ok');
   if (manual) syncNewBookingsToCalendar();
 }
 
