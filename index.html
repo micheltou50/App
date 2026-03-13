@@ -808,6 +808,16 @@
           </div>
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
+        <div class="settings-cat-item" onclick="openSettingsPanel('team')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#34C759;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👥</div>
+            <div><div style="font-weight:500;font-size:14px">Team</div><div style="font-size:12px;color:var(--text-soft)" id="team-count-row">Cleaners & contractors</div></div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Messaging</div>
+      <div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:20px">
         <div class="settings-cat-item" onclick="openSettingsPanel('sms-template')" style="border-bottom:none">
           <div style="display:flex;align-items:center;gap:14px">
             <div style="width:36px;height:36px;border-radius:9px;background:#5AC8FA;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📱</div>
@@ -816,6 +826,57 @@
           <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
         </div>
       </div>
+    </div>
+
+    <!-- PANEL: TEAM LIST -->
+    <div id="settings-panel-team" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Property</div>
+      <div id="team-list-container"></div>
+      <div class="card" style="padding:0 16px;overflow:hidden">
+        <div class="settings-cat-item" onclick="openSettingsPanel('add-person')" style="border-bottom:none">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">＋</div>
+            <div style="font-weight:500;font-size:14px;color:var(--forest)">Add Person</div>
+          </div>
+          <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PANEL: ADD PERSON -->
+    <div id="settings-panel-add-person" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Team</div>
+      <div class="card">
+        <div class="card-title">👤 Add Person</div>
+        <div class="form-row">
+          <div class="field"><label>Name</label><input type="text" id="new-cleaner-name" placeholder="e.g. Megan"></div>
+          <div class="field"><label>Role</label>
+            <select id="new-cleaner-role">
+              <option value="Cleaner">Cleaner</option>
+              <option value="Plumber">Plumber</option>
+              <option value="Electrician">Electrician</option>
+              <option value="Landscaper">Landscaper</option>
+              <option value="Builder">Builder</option>
+              <option value="Handyman">Handyman</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <label>Mobile</label>
+        <input type="tel" id="new-cleaner-phone" placeholder="e.g. 0412 345 678">
+        <label>Email</label>
+        <input type="email" id="new-cleaner-email" placeholder="e.g. megan@email.com">
+        <label>PIN (4 digits)</label>
+        <input type="text" id="new-cleaner-pin" inputmode="numeric" pattern="\d*" maxlength="4" placeholder="e.g. 1234" oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
+        <div style="font-size:11px;color:var(--text-soft);margin-top:-6px;margin-bottom:10px">Used to log in to their cleaner app. Can be set or changed later.</div>
+        <button class="btn-primary" onclick="addCleaner()">Add Person</button>
+      </div>
+    </div>
+
+    <!-- PANEL: CLEANER PROFILE (rendered dynamically) -->
+    <div id="settings-panel-cleaner-profile" style="display:none">
+      <div class="settings-back" onclick="closeSettingsPanel()">‹ Team</div>
+      <div id="cleaner-profile-content"></div>
     </div>
 
     <!-- PANEL: PROPERTY INFO -->
@@ -834,12 +895,31 @@
     <!-- PANEL: PUSH NOTIFICATIONS -->
     <div id="settings-panel-notifications" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
-      <div class="card">
+      <div class="card" style="margin-bottom:10px">
         <div class="card-title">🔔 Push Notifications</div>
-        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Get notified when your cleaner accepts, declines, or completes a clean. On iPhone, you must tap the button below — iOS requires a manual tap to enable notifications.</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">Get notified when your cleaner accepts, declines, or completes a clean. On iPhone, you must tap the button below — iOS requires a manual tap.</div>
         <div id="notif-status" style="font-size:12px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:var(--warm);color:var(--text-soft)">Checking status…</div>
         <button class="btn-primary" onclick="enableNotificationsManually()" id="notif-enable-btn">🔔 Enable Notifications on This Device</button>
         <div id="notif-result" style="font-size:12px;margin-top:8px;display:none"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">✉️ Email Notifications via Resend</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-bottom:10px">Automatically emails your cleaner when you assign a clean — a backup alongside push notifications. Free up to 3,000 emails/month.</div>
+        <div style="padding:10px 12px;background:var(--mist);border-radius:var(--radius-sm);font-size:11px;color:var(--text-soft);line-height:1.6;margin-bottom:12px">
+          <strong>Setup:</strong><br>
+          1. Sign up free at <strong>resend.com</strong><br>
+          2. Create an API key<br>
+          3. Paste it below — add cleaners' emails in Settings → Property → Team
+        </div>
+        <label>Resend API Key</label>
+        <input type="password" id="resend-api-key" placeholder="re_...">
+        <label>From Email</label>
+        <input type="email" id="resend-from-email" placeholder="e.g. glenhaven@yourdomain.com">
+        <div style="font-size:11px;color:var(--text-soft);margin-top:-6px;margin-bottom:10px">Must be from a domain verified in Resend. Or use <strong>onboarding@resend.dev</strong> to test.</div>
+        <button class="btn-primary" onclick="saveResendSettings()">Save Email Settings</button>
+        <div id="resend-save-confirm" style="font-size:12px;color:var(--moss);margin-top:6px;display:none">✓ Saved</div>
+        <button class="btn-secondary" onclick="testResendEmail()" style="margin-top:8px">✉️ Send Test Email</button>
+        <div id="resend-test-result" style="font-size:12px;margin-top:6px;display:none;padding:8px;border-radius:8px"></div>
       </div>
     </div>
 
@@ -870,9 +950,6 @@
     <div id="settings-cat-cleaner" style="display:none">
       <div class="settings-back" onclick="closeSettingsCat()">‹ Settings</div>
       <div id="cleaner-access-list"></div>
-      <div class="card" style="margin-bottom:12px;background:var(--forest);color:white">
-        <div style="font-size:13px;line-height:1.6;opacity:0.85">Each cleaner gets their own private link + PIN. Add people in <strong>Property → Team</strong> first.</div>
-      </div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
@@ -2711,8 +2788,15 @@ function openSettingsPanel(panelId) {
     const el = document.getElementById('settings-sms-template');
     if (el) el.value = localStorage.getItem('gh-sms-template') || defaultTemplate;
   }
+  if (panelId === 'team') {
+    renderTeamList();
+  }
   if (panelId === 'notifications') {
     setTimeout(updateNotifStatus, 100);
+    const rk = document.getElementById('resend-api-key');
+    if (rk) rk.value = localStorage.getItem('gh-resend-key') || '';
+    const rf = document.getElementById('resend-from-email');
+    if (rf) rf.value = localStorage.getItem('gh-resend-from') || '';
   }
   if (panelId === 'expense-cats') {
     renderExpenseCatSettings();
@@ -3883,44 +3967,125 @@ function saveCleaners(list) {
 function addCleaner() {
   const name = document.getElementById('new-cleaner-name').value.trim();
   const phone = document.getElementById('new-cleaner-phone').value.trim();
+  const email = document.getElementById('new-cleaner-email').value.trim();
+  const pin = document.getElementById('new-cleaner-pin').value.trim();
   const roleEl = document.getElementById('new-cleaner-role');
   const role = roleEl ? roleEl.value : 'Cleaner';
   if (!name) { showBanner('⚠ Please enter a name','warn'); return; }
+  if (pin && !/^\d{4}$/.test(pin)) { showBanner('⚠ PIN must be exactly 4 digits','warn'); return; }
   const people = loadCleaners();
-  people.push({ id: Date.now(), name, phone, role });
+  people.push({ id: Date.now(), name, phone, email: email || '', pin: pin || '', role });
   saveCleaners(people);
   document.getElementById('new-cleaner-name').value = '';
   document.getElementById('new-cleaner-phone').value = '';
-  renderCleanersList();
+  document.getElementById('new-cleaner-email').value = '';
+  document.getElementById('new-cleaner-pin').value = '';
   populateCleanerSelect();
   populateContractorSelect();
+  showBanner('✓ ' + name + ' added', 'ok');
+  // Go back to team list
+  openSettingsPanel('team');
 }
 function deleteCleaner(id) {
   saveCleaners(loadCleaners().filter(c => c.id !== id));
-  renderCleanersList();
+  renderTeamList();
   populateCleanerSelect();
   populateContractorSelect();
 }
 function renderCleanersList() {
-  const people = loadCleaners();
-  const el = document.getElementById('cleaners-list');
+  // Legacy — now handled by renderTeamList
+  renderTeamList();
+}
+function renderTeamList() {
+  const el = document.getElementById('team-list-container');
   if (!el) return;
-  if (!people.length) { el.innerHTML = '<div style="color:var(--text-soft);font-size:13px;margin-bottom:8px">No people added yet.</div>'; return; }
+  const people = loadCleaners();
+  // Update subtitle on property cat
+  const countRow = document.getElementById('team-count-row');
+  if (countRow) countRow.textContent = people.length ? people.length + ' people' : 'Cleaners & contractors';
+  if (!people.length) { el.innerHTML = ''; return; }
   const roleColors = {Cleaner:'var(--moss)',Plumber:'#1565C0',Electrician:'#E65100',Landscaper:'#2E7D32',Builder:'#6A1B9A',Handyman:'#00838F',Other:'var(--stone)'};
-  el.innerHTML = people.map(c => `
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--warm)">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="width:8px;height:8px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'}"></div>
+  el.innerHTML = `<div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:12px">` +
+    people.map((c, i) => `
+    <div class="settings-cat-item" onclick="openCleanerProfile(${c.id})" ${i===people.length-1?'style="border-bottom:none"':''}>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'};color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
         <div>
-          <div style="font-weight:600;font-size:14px">${c.name} <span style="font-size:11px;color:var(--text-soft);font-weight:400">${c.role||'Cleaner'}</span></div>
-          <div style="font-size:12px;color:var(--text-soft)">${c.phone || 'No number'}</div>
+          <div style="font-weight:500;font-size:14px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}${c.email?' · '+c.email:c.phone?' · '+c.phone:''}</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        ${c.phone?`<a href="tel:${c.phone}" style="width:32px;height:32px;border-radius:50%;background:var(--moss);color:white;display:flex;align-items:center;justify-content:center;font-size:14px;text-decoration:none">📞</a>`:''}
-        <button onclick="deleteCleaner(${c.id})" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer">✕</button>
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>`).join('') + `</div>`;
+}
+function openCleanerProfile(id) {
+  const c = loadCleaners().find(x => x.id === id);
+  if (!c) return;
+  const PERM_LABELS = [
+    { key: 'firstName',  label: 'Guest first name' },
+    { key: 'fullName',   label: 'Full guest name' },
+    { key: 'guests',     label: 'Number of guests' },
+    { key: 'notes',      label: 'Check-in notes' },
+    { key: 'payout',     label: 'Cleaning fee / payout' },
+  ];
+  const perm = c.permissions || {};
+  const link = cleanerLinkForId(c);
+  const roleColors = {Cleaner:'var(--moss)',Plumber:'#1565C0',Electrician:'#E65100',Landscaper:'#2E7D32',Builder:'#6A1B9A',Handyman:'#00838F',Other:'var(--stone)'};
+  document.getElementById('cleaner-profile-content').innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="width:48px;height:48px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'};color:white;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:17px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}</div>
+        </div>
+        <button onclick="deleteCleaner(${c.id})" style="background:none;border:none;color:var(--red);font-size:13px;cursor:pointer;padding:4px 8px">Remove</button>
       </div>
-    </div>`).join('');
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">Contact</div>
+      <label>Mobile</label>
+      <input type="tel" id="cp-phone-${c.id}" value="${c.phone||''}" placeholder="e.g. 0412 345 678">
+      <label>Email</label>
+      <input type="email" id="cp-email-${c.id}" value="${c.email||''}" placeholder="e.g. ${c.name.toLowerCase()}@email.com">
+      <button class="btn-secondary" onclick="saveCleanerContact(${c.id})" style="margin-top:4px">Save Contact</button>
+      <div id="cp-contact-confirm-${c.id}" style="font-size:12px;color:var(--moss);margin-top:4px;display:none">✓ Saved</div>
+    </div>
+    <div class="card" style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">🔐 App Access</div>
+      <label>PIN (4 digits)</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="font-size:24px;font-weight:700;color:var(--forest);letter-spacing:8px;flex:1">${c.pin||'—'}</div>
+        ${c.pin?`<button onclick="clearCleanerPinById(${c.id})" style="font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:20px;padding:4px 10px;cursor:pointer;white-space:nowrap">Clear</button>`:''}
+      </div>
+      <input type="text" inputmode="numeric" pattern="\\d*" id="pin-input-${c.id}" placeholder="Set 4-digit PIN" maxlength="4"
+        style="font-size:20px;letter-spacing:8px;text-align:center;padding:12px;border:1.5px solid var(--stone);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;background:white;margin-bottom:8px;color:var(--text);width:100%"
+        oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4)">
+      <button onclick="saveCleanerPinById(${c.id})" class="btn-primary" style="width:100%">Save PIN</button>
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-top:14px;margin-bottom:8px">🔗 App Link</div>
+      <div style="background:var(--mist);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--forest);font-weight:500;word-break:break-all;margin-bottom:8px;border:1px solid var(--warm)">${link}</div>
+      <button onclick="copyCleanerLinkById(${c.id})" class="btn-primary" style="width:100%">📋 Copy Link</button>
+    </div>
+    <div class="card">
+      <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">👁 What They Can See</div>
+      ${PERM_LABELS.map(p => `
+      <div class="ios-toggle-row" style="padding:6px 0">
+        <div class="ios-toggle-label" style="font-size:13px">${p.label}</div>
+        <label class="ios-toggle"><input type="checkbox" ${perm[p.key]?'checked':''} onchange="saveCleanerPerm(${c.id},'${p.key}',this.checked)"><div class="ios-toggle-track"></div><div class="ios-toggle-thumb"></div></label>
+      </div>`).join('')}
+    </div>`;
+  openSettingsPanel('cleaner-profile');
+}
+function saveCleanerContact(id) {
+  const list = loadCleaners();
+  const c = list.find(x => x.id === id);
+  if (!c) return;
+  const phoneEl = document.getElementById('cp-phone-' + id);
+  const emailEl = document.getElementById('cp-email-' + id);
+  if (phoneEl) c.phone = phoneEl.value.trim();
+  if (emailEl) c.email = emailEl.value.trim();
+  saveCleaners(list);
+  const conf = document.getElementById('cp-contact-confirm-' + id);
+  if (conf) { conf.style.display='block'; setTimeout(()=>conf.style.display='none',2000); }
+  populateCleanerSelect();
 }
 function populateCleanerSelect() {
   const cleaners = loadCleaners().filter(c => !c.role || c.role === 'Cleaner');
@@ -6915,7 +7080,7 @@ async function assignCleanerToBooking(bookingId) {
     }
   } catch(e) { console.warn('Could not refresh pushSubs:', e); }
 
-  // Now send push with fresh subs
+  // Send push notification
   const cleanerSub = getCleanerSub(cleanerObj.id);
   console.log('Cleaner sub for id', cleanerObj.id, ':', cleanerSub ? 'found' : 'NOT FOUND');
   if (cleanerSub) {
@@ -6927,6 +7092,107 @@ async function assignCleanerToBooking(bookingId) {
     );
   } else {
     console.warn('No push subscription found for cleaner', cleanerObj.id, '— cleaner needs to enable notifications');
+  }
+
+  // Send email notification via Resend (fires silently in background)
+  if (cleanerObj.email && localStorage.getItem('gh-resend-key')) {
+    sendCleanerEmail({
+      cleanerName: cleanerObj.name,
+      cleanerEmail: cleanerObj.email,
+      guestName: booking.name || 'Guest',
+      checkin: fmt(booking.checkin),
+      checkout: fmt(booking.checkout),
+      cleanerLink: cleanerLinkForId(cleanerObj)
+    }).then(result => {
+      if (result.ok) showBanner('✉️ Email sent to ' + cleanerObj.name, 'ok');
+      else if (result.reason !== 'no-key' && result.reason !== 'no-email') console.warn('Email failed:', result);
+    });
+  }
+}
+
+// ── RESEND EMAIL NOTIFICATIONS ───────────────────────────────────────────────
+function saveResendSettings() {
+  const key = document.getElementById('resend-api-key')?.value.trim();
+  const from = document.getElementById('resend-from-email')?.value.trim();
+  if (key) localStorage.setItem('gh-resend-key', key);
+  if (from) localStorage.setItem('gh-resend-from', from);
+  const el = document.getElementById('resend-save-confirm');
+  if (el) { el.style.display = 'block'; setTimeout(() => el.style.display = 'none', 2000); }
+}
+
+async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin, checkout, cleanerLink }) {
+  const apiKey = localStorage.getItem('gh-resend-key');
+  const from = localStorage.getItem('gh-resend-from') || 'onboarding@resend.dev';
+  if (!apiKey || !cleanerEmail) return { ok: false, reason: !apiKey ? 'no-key' : 'no-email' };
+  const firstName = cleanerName.split(' ')[0];
+  const subject = `New clean assigned — ${guestName} (${checkin})`;
+  const html = `
+    <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
+      <div style="background:#1E3A2F;padding:20px 24px;border-radius:10px 10px 0 0">
+        <h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1>
+      </div>
+      <div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">
+        <p style="margin:0 0 16px">Hi ${firstName},</p>
+        <p style="margin:0 0 20px">You've been assigned a new clean at Glenhaven.</p>
+        <div style="background:white;border-radius:8px;padding:16px;border:1px solid #e8e0d8;margin-bottom:20px">
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">
+            <span style="color:#666;font-size:14px">Guest</span>
+            <span style="font-weight:600;font-size:14px">${guestName}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ebe4">
+            <span style="color:#666;font-size:14px">Check-in</span>
+            <span style="font-weight:600;font-size:14px">${checkin}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0">
+            <span style="color:#666;font-size:14px">Check-out</span>
+            <span style="font-weight:600;font-size:14px">${checkout}</span>
+          </div>
+        </div>
+        <a href="${cleanerLink}" style="display:block;background:#1E3A2F;color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>
+        <p style="margin:16px 0 0;font-size:12px;color:#999;text-align:center">Tap the button above to accept or decline this clean.</p>
+      </div>
+    </div>`;
+  try {
+    const resp = await fetch('/.netlify/functions/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey, from, to: cleanerEmail, subject, html })
+    });
+    const data = await resp.json();
+    return { ok: resp.ok, data };
+  } catch(e) {
+    return { ok: false, reason: e.message };
+  }
+}
+
+async function testResendEmail() {
+  const resultEl = document.getElementById('resend-test-result');
+  if (resultEl) { resultEl.style.display = 'block'; resultEl.style.background = 'var(--warm)'; resultEl.textContent = 'Sending test…'; }
+  const apiKey = localStorage.getItem('gh-resend-key');
+  const from = localStorage.getItem('gh-resend-from') || 'onboarding@resend.dev';
+  if (!apiKey) {
+    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Save your Resend API key first'; }
+    return;
+  }
+  const cleaners = loadCleaners().filter(c => c.email);
+  const testTo = cleaners[0]?.email;
+  if (!testTo) {
+    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Add an email to at least one team member first'; }
+    return;
+  }
+  const result = await sendCleanerEmail({
+    cleanerName: cleaners[0].name, cleanerEmail: testTo,
+    guestName: 'Test Guest', checkin: 'Tomorrow', checkout: 'Day after',
+    cleanerLink: window.location.href
+  });
+  if (resultEl) {
+    if (result.ok) {
+      resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)';
+      resultEl.textContent = `✓ Test email sent to ${testTo}`;
+    } else {
+      resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)';
+      resultEl.textContent = '✕ Failed — check your API key and from address';
+    }
   }
 }
 
@@ -6942,55 +7208,32 @@ function renderCleanerAccessList() {
     el.innerHTML = `<div class="card" style="margin-bottom:12px;text-align:center;padding:24px">
       <div style="font-size:32px;margin-bottom:8px">🧹</div>
       <div style="font-weight:600;font-size:14px;margin-bottom:6px">No cleaners added yet</div>
-      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px">Add cleaners in Settings → Property &amp; People first</div>
-      <button onclick="openSettingsCat('property')" class="btn-primary">Go to Property &amp; People</button>
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px">Go to Settings → Property → Team to add cleaners</div>
+      <button onclick="openSettingsCat('property');openSettingsPanel('team')" class="btn-primary">Add Team Members</button>
     </div>`;
     return;
   }
-  const PERM_LABELS = [
-    { key: 'firstName',  label: 'Guest first name' },
-    { key: 'fullName',   label: 'Full guest name' },
-    { key: 'guests',     label: 'Number of guests' },
-    { key: 'notes',      label: 'Check-in notes' },
-    { key: 'payout',     label: 'Cleaning fee / payout' },
-  ];
-  el.innerHTML = cleaners.map(c => {
-    const perm = c.permissions || {};
-    const link = cleanerLinkForId(c);
-    return `<div class="card" style="margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--warm)">
-        <div style="width:40px;height:40px;border-radius:50%;background:var(--forest);color:white;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:15px">${c.name}</div>
-          <div style="font-size:11px;color:var(--text-soft)">${c.phone||'No phone'}</div>
+  el.innerHTML = `<div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:12px">` +
+    cleaners.map((c, i) => `
+    <div class="settings-cat-item" onclick="openCleanerProfile(${c.id})" ${i===cleaners.length-1?'style="border-bottom:none"':''}>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--forest);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
+        <div>
+          <div style="font-weight:500;font-size:14px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.pin ? '🔐 PIN set' : '⚠️ No PIN'} · ${c.email ? '✉️ Email set' : 'No email'}</div>
         </div>
       </div>
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:8px">🔐 PIN</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="font-size:20px;font-weight:700;color:var(--forest);letter-spacing:5px;flex:1">${c.pin || '—'}</div>
-          ${c.pin ? `<button onclick="clearCleanerPinById(${c.id})" style="font-size:11px;color:var(--red);background:none;border:1px solid var(--red);border-radius:20px;padding:4px 10px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap">Clear</button>` : ''}
-        </div>
-        <input type="text" inputmode="numeric" pattern="\d*" id="pin-input-${c.id}" placeholder="Set 4-digit PIN" maxlength="4"
-          style="width:100%;font-size:20px;letter-spacing:8px;text-align:center;padding:12px;border:1.5px solid var(--stone);border-radius:var(--radius-sm);font-family:'DM Sans',sans-serif;background:white;margin-bottom:8px;color:var(--text)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
-        <button onclick="saveCleanerPinById(${c.id})" class="btn-primary" style="width:100%">Save PIN</button>
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>`).join('') + `</div>
+  <div class="card" style="padding:0 16px;overflow:hidden">
+    <div class="settings-cat-item" onclick="openSettingsCat('property');setTimeout(()=>openSettingsPanel('team'),50)" style="border-bottom:none">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">＋</div>
+        <div style="font-weight:500;font-size:14px;color:var(--forest)">Add Person</div>
       </div>
-      <div style="margin-bottom:12px;padding-top:12px;border-top:1px solid var(--warm)">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:10px">👁 What they can see</div>
-        ${PERM_LABELS.map(p => `
-        <div class="ios-toggle-row" style="padding:6px 0">
-          <div class="ios-toggle-label" style="font-size:13px">${p.label}</div>
-          <label class="ios-toggle"><input type="checkbox" ${perm[p.key]?'checked':''} onchange="saveCleanerPerm(${c.id},'${p.key}',this.checked)"><div class="ios-toggle-track"></div><div class="ios-toggle-thumb"></div></label>
-        </div>`).join('')}
-      </div>
-      <div style="padding-top:12px;border-top:1px solid var(--warm)">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:8px">🔗 Their Link</div>
-        <div style="background:var(--mist);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--forest);font-weight:500;word-break:break-all;margin-bottom:8px;border:1px solid var(--warm)">${link}</div>
-        <button onclick="copyCleanerLinkById(${c.id})" class="btn-primary" style="width:100%">📋 Copy Link</button>
-      </div>
-    </div>`;
-  }).join('');
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>
+  </div>`;
 }
 function cleanerLinkForId(c) {
   const base = window.location.origin + window.location.pathname;
