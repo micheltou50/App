@@ -216,7 +216,19 @@ let calMonth = new Date().getMonth();
 
 const _appDataTimers = {};
 
+function cleanHasAssignedCleaner(c) {
+  return !!((c && c.cleaner && String(c.cleaner).trim()) || (c && c.cleanerId));
+}
+
+function normalizeCleanAssignmentState(c) {
+  if (!cleanHasAssignedCleaner(c)) {
+    c.cleanerConfirmed = false;
+    c.cleanerDeclined = false;
+  }
+}
+
 function save() {
+  cleans.forEach(normalizeCleanAssignmentState);
   localStorage.setItem('gh-bookings', JSON.stringify(bookings));
   localStorage.setItem('gh-cleans',   JSON.stringify(cleans));
   localStorage.setItem('gh-notes',    JSON.stringify(notes));
@@ -714,11 +726,13 @@ function renderCleaning() {
     const days = Math.ceil((new Date(c.date) - now) / 86400000);
     const urgClass = days <= 0 ? 'urgent' : days <= 2 ? 'soon' : 'ok';
     const urgText = days < 0 ? 'Overdue' : days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days}d`;
+    const cleanerAssigned = cleanHasAssignedCleaner(c);
+    const isConfirmed = cleanerAssigned && c.cleanerConfirmed;
     const statusBadge = c.done
       ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✅ Done</span>'
       : c.cleanerDeclined
       ? '<span style="font-size:11px;font-weight:600;color:var(--red);background:#FDECEA;padding:3px 9px;border-radius:20px">❌ Declined</span>'
-      : c.cleanerConfirmed
+      : isConfirmed
       ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✓ Accepted</span>'
       : '<span style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:3px 9px;border-radius:20px">⏳ Pending</span>';
     return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
@@ -762,7 +776,7 @@ function renderCleaning() {
     const declined = cleans.filter(c => c.cleanerDeclined);
     const unassigned = bookings.filter(b => {
       const isFuture = new Date(b.checkout) >= now;
-      const hasClean = cleans.some(c => c.bookingId === b.id || c.guestName === b.name);
+      const hasClean = cleans.some(c => c.bookingId === b.id);
       return isFuture && !hasClean;
     }).sort((a, b) => new Date(a.checkout) - new Date(b.checkout));
 
@@ -786,13 +800,14 @@ function renderCleaning() {
         const days = Math.ceil((new Date(b.checkout) - now) / 86400000);
         const urgClass = days <= 3 ? 'urgent' : days <= 7 ? 'soon' : 'ok';
         return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-          <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div>
               <div style="font-weight:600;font-size:14px">${escHtml(b.name || '')}</div>
               <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${escHtml(fmt(b.checkout))} · ${escHtml(b.guests || 0)} guests</div>
             </div>
             <div class="clean-urgency ${urgClass}">No cleaner</div>
           </div>
+          <button onclick="openAddCleanForBooking(${b.id})" style="width:100%;margin-top:8px;background:var(--forest);color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">🧹 Assign Cleaner</button>
         </div>`;
       }).join('');
     }
@@ -1911,6 +1926,16 @@ function autoFillCleanDate() {
   if (booking && booking.checkout) {
     document.getElementById('clean-date').value = booking.checkout;
   }
+}
+
+function openAddCleanForBooking(bookingId) {
+  showSection('cleaning');
+  const bookingSelect = document.getElementById('clean-booking-select');
+  if (!bookingSelect) return;
+  bookingSelect.value = String(bookingId);
+  autoFillCleanDate();
+  const addCard = document.getElementById('clean-add-card');
+  if (addCard) addCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function addClean() {
   const bookingId=Number(document.getElementById('clean-booking-select').value);
@@ -5232,8 +5257,8 @@ function renderCleanerCleans() {
   }).sort((a,b) => a.date.localeCompare(b.date));
 
   // Badges on both tabs
-  const newCount = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined).length;
-  const upcomingCount = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined).length;
+  const newCount = relevant.filter(c => !(cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined).length;
+  const upcomingCount = relevant.filter(c => (cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined).length;
   const newBadge = document.getElementById('csubtab-new-badge');
   const upBadge = document.getElementById('csubtab-upcoming-badge');
   const badgeStyle = 'border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;font-weight:700';
@@ -5294,7 +5319,7 @@ function renderCleanerCleans() {
 
   // NEW tab — pending (not yet accepted or declined)
   const newEl = document.getElementById('cleaner-cleans-new');
-  const newCleans = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined);
+  const newCleans = relevant.filter(c => !(cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined);
   if (newEl) {
     if (!newCleans.length) {
       newEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
@@ -5315,7 +5340,7 @@ function renderCleanerCleans() {
 
   // UPCOMING tab — accepted cleans
   const upcomingEl = document.getElementById('cleaner-cleans-upcoming');
-  const upcomingCleans = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined);
+  const upcomingCleans = relevant.filter(c => (cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined);
   if (upcomingEl) {
     if (!upcomingCleans.length) {
       upcomingEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
@@ -5482,20 +5507,7 @@ function assignCleanerToBooking(bookingId) {
   if (!booking) { showBanner('⚠ Booking not found', 'warn'); return; }
 
   closeDetailModal();
-  showSection('cleaning');
-
-  const prefill = () => {
-    const bookingSelect = document.getElementById('clean-booking-select');
-    if (!bookingSelect) return;
-
-    bookingSelect.value = String(bookingId);
-    autoFillCleanDate();
-
-    const addCard = document.getElementById('clean-add-card');
-    if (addCard) addCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  setTimeout(prefill, 40);
+  setTimeout(() => openAddCleanForBooking(bookingId), 40);
 }
 
 // Init on load
