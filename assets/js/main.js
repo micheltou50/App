@@ -376,6 +376,7 @@ async function syncFromSheets(manual = false) {
       }
     }
 
+    cleans.forEach(normalizeCleanAssignmentState);
     finishSync(imported, skipped, manual);
   } catch(e) {
     console.error('[Glenhaven] Sync error:', e);
@@ -2521,7 +2522,8 @@ function renderTeamList() {
         <div style="width:36px;height:36px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'};color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
         <div>
           <div style="font-weight:500;font-size:14px">${c.name}</div>
-          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}${c.email?' · '+c.email:c.phone?' · '+c.phone:''}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}</div>
+          <div style="font-size:11px;color:var(--text-soft)">${c.phone ? '📱 ' + c.phone : '📱 no mobile'}${c.email ? ' · ✉️ ' + c.email : ''}${c.pin ? ' · 🔐 PIN set' : ' · 🔐 no PIN'}</div>
         </div>
       </div>
       <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
@@ -4762,6 +4764,7 @@ async function pullAppData(manual = false) {
       });
       cleans.length = 0;
       merged.forEach(c => cleans.push(c));
+      cleans.forEach(normalizeCleanAssignmentState);
       localStorage.setItem('gh-cleans', JSON.stringify(cleans));
       // Sync booking.cleanerConfirmed from cleans
       cleans.forEach(c => {
