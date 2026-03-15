@@ -216,19 +216,7 @@ let calMonth = new Date().getMonth();
 
 const _appDataTimers = {};
 
-function cleanHasAssignedCleaner(c) {
-  return !!((c && c.cleaner && String(c.cleaner).trim()) || (c && c.cleanerId));
-}
-
-function normalizeCleanAssignmentState(c) {
-  if (!cleanHasAssignedCleaner(c)) {
-    c.cleanerConfirmed = false;
-    c.cleanerDeclined = false;
-  }
-}
-
 function save() {
-  cleans.forEach(normalizeCleanAssignmentState);
   localStorage.setItem('gh-bookings', JSON.stringify(bookings));
   localStorage.setItem('gh-cleans',   JSON.stringify(cleans));
   localStorage.setItem('gh-notes',    JSON.stringify(notes));
@@ -376,7 +364,6 @@ async function syncFromSheets(manual = false) {
       }
     }
 
-    cleans.forEach(normalizeCleanAssignmentState);
     finishSync(imported, skipped, manual);
   } catch(e) {
     console.error('[Glenhaven] Sync error:', e);
@@ -445,13 +432,13 @@ function showBanner(msg, type) {
   const text = document.getElementById('sync-text');
 
   // UX decision: only surface banners when something needs attention.
-  const visibleTypes = new Set(['warn', 'error', 'confirm']);
-  if (!visibleTypes.has(type)) {
+  const problemTypes = new Set(['warn', 'error']);
+  if (!problemTypes.has(type)) {
     banner.style.display = 'none';
     return;
   }
 
-  const colors = { warn: '#B9652C', error: '#B24747', confirm: '#2f7157' };
+  const colors = { warn: '#B9652C', error: '#B24747' };
   banner.style.background = colors[type] || colors.warn;
   banner.style.display = 'flex';
   text.textContent = msg;
@@ -727,13 +714,11 @@ function renderCleaning() {
     const days = Math.ceil((new Date(c.date) - now) / 86400000);
     const urgClass = days <= 0 ? 'urgent' : days <= 2 ? 'soon' : 'ok';
     const urgText = days < 0 ? 'Overdue' : days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `In ${days}d`;
-    const cleanerAssigned = cleanHasAssignedCleaner(c);
-    const isConfirmed = cleanerAssigned && c.cleanerConfirmed;
     const statusBadge = c.done
       ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✅ Done</span>'
       : c.cleanerDeclined
       ? '<span style="font-size:11px;font-weight:600;color:var(--red);background:#FDECEA;padding:3px 9px;border-radius:20px">❌ Declined</span>'
-      : isConfirmed
+      : c.cleanerConfirmed
       ? '<span style="font-size:11px;font-weight:600;color:var(--moss);background:#EDF7ED;padding:3px 9px;border-radius:20px">✓ Accepted</span>'
       : '<span style="font-size:11px;font-weight:600;color:var(--amber);background:#FFF5E6;padding:3px 9px;border-radius:20px">⏳ Pending</span>';
     return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
@@ -777,7 +762,7 @@ function renderCleaning() {
     const declined = cleans.filter(c => c.cleanerDeclined);
     const unassigned = bookings.filter(b => {
       const isFuture = new Date(b.checkout) >= now;
-      const hasClean = cleans.some(c => c.bookingId === b.id);
+      const hasClean = cleans.some(c => c.bookingId === b.id || c.guestName === b.name);
       return isFuture && !hasClean;
     }).sort((a, b) => new Date(a.checkout) - new Date(b.checkout));
 
@@ -801,14 +786,13 @@ function renderCleaning() {
         const days = Math.ceil((new Date(b.checkout) - now) / 86400000);
         const urgClass = days <= 3 ? 'urgent' : days <= 7 ? 'soon' : 'ok';
         return `<div style="padding:14px 0;border-bottom:1px solid var(--warm)">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
             <div>
               <div style="font-weight:600;font-size:14px">${escHtml(b.name || '')}</div>
               <div style="font-size:12px;color:var(--text-soft);margin-top:2px">Checkout: ${escHtml(fmt(b.checkout))} · ${escHtml(b.guests || 0)} guests</div>
             </div>
             <div class="clean-urgency ${urgClass}">No cleaner</div>
           </div>
-          <button onclick="openAddCleanForBooking(${b.id})" style="width:100%;margin-top:8px;background:var(--forest);color:white;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">🧹 Assign Cleaner</button>
         </div>`;
       }).join('');
     }
@@ -1773,7 +1757,17 @@ function showDetail(id) {
       ${bc.map(c=>`<div style="font-size:12px;color:var(--text-soft);padding:4px 0">${c.cleaner} · ${fmt(c.date)}</div>`).join('')}
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
         <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:var(--text-soft);margin-bottom:8px">Assign Cleaner</div>
-        <button onclick="assignCleanerToBooking(${b.id})" class="btn-primary" style="width:100%">🧹 Assign Cleaner</button>
+        ${(()=>{
+          const cls = loadCleaners().filter(c=>!c.role||c.role==='Cleaner');
+          const assigned = bc[0];
+          if (!cls.length) return '<div style="font-size:12px;color:var(--text-soft)">No cleaners set up yet — add in Settings → Property &amp; People</div>';
+          return `<select id="detail-assign-cleaner" style="margin-bottom:8px">
+            <option value="">— Not assigned —</option>
+            ${cls.map(c=>`<option value="${c.id}" ${assigned&&assigned.cleanerId===c.id?'selected':''}>${c.name}</option>`).join('')}
+          </select>
+          <input type="date" id="detail-assign-date" value="${assigned?assigned.date:b.checkout}" style="margin-bottom:8px">
+          <button onclick="assignCleanerToBooking(${b.id})" class="btn-primary" style="width:100%">💾 Save Assignment</button>`;
+        })()}
       </div>
       ${b.status==='completed'?`
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--warm)">
@@ -1917,7 +1911,7 @@ function addBooking() {
     cleanerConfirmed:false, status:document.getElementById('b-status').value, _local:true
   };
   bookings.push(newB); save(); pushToSheet('add', newB); closeModal(); render();
-  showBanner('✓ Booking added', 'confirm');
+  showBanner('✅ Booking added', 'ok');
   pushBookingToCalendar(newB);
 }
 function autoFillCleanDate() {
@@ -1927,16 +1921,6 @@ function autoFillCleanDate() {
   if (booking && booking.checkout) {
     document.getElementById('clean-date').value = booking.checkout;
   }
-}
-
-function openAddCleanForBooking(bookingId) {
-  showSection('cleaning');
-  const bookingSelect = document.getElementById('clean-booking-select');
-  if (!bookingSelect) return;
-  bookingSelect.value = String(bookingId);
-  autoFillCleanDate();
-  const addCard = document.getElementById('clean-add-card');
-  if (addCard) addCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function addClean() {
   const bookingId=Number(document.getElementById('clean-booking-select').value);
@@ -1953,7 +1937,7 @@ function addClean() {
   const newClean = {id:Date.now(), bookingId, guestName:booking.name, cleaner, cleanerId, date, done:false, notified:false, cleanerConfirmed:false};
   cleans.push(newClean);
   save();
-  showBanner('✓ Clean scheduled', 'confirm');
+  showBanner('✅ Clean scheduled for ' + newClean.date, 'ok');
   // Prompt to send SMS — only mark notified if user confirms
   showAppModal({ title: '💬 Send SMS?', msg: `Notify ${cleaner} about this booking now?`, confirmText: 'Send SMS', cancelText: 'Later' })
     .then(ok => {
@@ -2285,7 +2269,7 @@ function saveSMSTemplate() {
   const val = document.getElementById('settings-sms-template');
   if (!val) return;
   localStorage.setItem('gh-sms-template', val.value);
-  showBanner('✓ Saved', 'confirm');
+  showBanner('✓ SMS template saved', 'ok');
 }
 
 // ── SAVE CLEANING FEE ────────────────────────────────────────────────────────
@@ -2351,7 +2335,6 @@ function saveScriptURL() {
   const el = document.getElementById('script-url-confirm');
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 2000);
-  showBanner('✓ Saved', 'confirm');
 }
 async function testScriptConnection() {
   const el = document.getElementById('script-test-result');
@@ -2380,7 +2363,6 @@ function saveBankDetails() {
   });
   const el = document.getElementById('inv-bank-confirm');
   el.style.display='block'; setTimeout(()=>el.style.display='none',2000);
-  showBanner('✓ Saved', 'confirm');
 }
 
 function loadClients() { return JSON.parse(localStorage.getItem('gh-clients')||'[]'); }
@@ -2434,7 +2416,6 @@ function saveGeminiKey() {
   const el = document.getElementById('gemini-key-confirm');
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 2000);
-  showBanner('✓ Saved', 'confirm');
 }
 function saveGDriveClientId() {
   const id = document.getElementById('gdrive-client-id').value.trim();
@@ -2443,7 +2424,6 @@ function saveGDriveClientId() {
   const el = document.getElementById('gdrive-client-confirm');
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 2000);
-  showBanner('✓ Saved', 'confirm');
 }
 function saveApiKey() {
   const key = document.getElementById('settings-api-key').value.trim();
@@ -2452,7 +2432,6 @@ function saveApiKey() {
   const el = document.getElementById('api-key-confirm');
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 2000);
-  showBanner('✓ Saved', 'confirm');
 }
 function getApiKey() {
   return localStorage.getItem('gh-api-key') || '';
@@ -2465,7 +2444,6 @@ function saveInvoiceDetails() {
   const el = document.getElementById('inv-save-confirm');
   el.style.display = 'block';
   setTimeout(() => el.style.display = 'none', 2000);
-  showBanner('✓ Saved', 'confirm');
 }
 function loadCleaners() {
   return loadJSON('gh-cleaners');
@@ -2522,8 +2500,7 @@ function renderTeamList() {
         <div style="width:36px;height:36px;border-radius:50%;background:${roleColors[c.role]||'var(--stone)'};color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
         <div>
           <div style="font-weight:500;font-size:14px">${c.name}</div>
-          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}</div>
-          <div style="font-size:11px;color:var(--text-soft)">${c.phone ? '📱 ' + c.phone : '📱 no mobile'}${c.email ? ' · ✉️ ' + c.email : ''}${c.pin ? ' · 🔐 PIN set' : ' · 🔐 no PIN'}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.role||'Cleaner'}${c.email?' · '+c.email:c.phone?' · '+c.phone:''}</div>
         </div>
       </div>
       <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
@@ -2596,7 +2573,6 @@ function saveCleanerContact(id) {
   saveCleaners(list);
   const conf = document.getElementById('cp-contact-confirm-' + id);
   if (conf) { conf.style.display='block'; setTimeout(()=>conf.style.display='none',2000); }
-  showBanner('✓ Saved', 'confirm');
   populateCleanerSelect();
 }
 function populateCleanerSelect() {
@@ -4764,7 +4740,6 @@ async function pullAppData(manual = false) {
       });
       cleans.length = 0;
       merged.forEach(c => cleans.push(c));
-      cleans.forEach(normalizeCleanAssignmentState);
       localStorage.setItem('gh-cleans', JSON.stringify(cleans));
       // Sync booking.cleanerConfirmed from cleans
       cleans.forEach(c => {
@@ -5260,8 +5235,8 @@ function renderCleanerCleans() {
   }).sort((a,b) => a.date.localeCompare(b.date));
 
   // Badges on both tabs
-  const newCount = relevant.filter(c => !(cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined).length;
-  const upcomingCount = relevant.filter(c => (cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined).length;
+  const newCount = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined).length;
+  const upcomingCount = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined).length;
   const newBadge = document.getElementById('csubtab-new-badge');
   const upBadge = document.getElementById('csubtab-upcoming-badge');
   const badgeStyle = 'border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;font-weight:700';
@@ -5322,7 +5297,7 @@ function renderCleanerCleans() {
 
   // NEW tab — pending (not yet accepted or declined)
   const newEl = document.getElementById('cleaner-cleans-new');
-  const newCleans = relevant.filter(c => !(cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined);
+  const newCleans = relevant.filter(c => !c.cleanerConfirmed && !c.cleanerDeclined);
   if (newEl) {
     if (!newCleans.length) {
       newEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
@@ -5343,7 +5318,7 @@ function renderCleanerCleans() {
 
   // UPCOMING tab — accepted cleans
   const upcomingEl = document.getElementById('cleaner-cleans-upcoming');
-  const upcomingCleans = relevant.filter(c => (cleanHasAssignedCleaner(c) && c.cleanerConfirmed) && !c.cleanerDeclined);
+  const upcomingCleans = relevant.filter(c => c.cleanerConfirmed && !c.cleanerDeclined);
   if (upcomingEl) {
     if (!upcomingCleans.length) {
       upcomingEl.innerHTML = `<div style="text-align:center;padding:48px 16px">
@@ -5434,7 +5409,7 @@ async function cleanerAccept(cleanId) {
   save();
   pushAppData('cleans', cleans);
   renderCleanerCleans();
-  showBanner('✓ Clean accepted', 'confirm');
+  showBanner('✓ Clean accepted!', 'ok');
   // Push owner
   const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
@@ -5463,7 +5438,7 @@ async function cleanerDecline(cleanId) {
   save();
   pushAppData('cleans', cleans); // push immediately
   renderCleanerCleans();
-  showBanner('✓ Clean declined', 'confirm');
+  showBanner('Clean declined', 'ok');
   // Push owner
   const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
@@ -5483,7 +5458,7 @@ async function cleanerMarkDone(cleanId) {
   if (!ok) return;
   c.done = true; c.cleanerConfirmed = true;
   save(); pushAppData('cleans', cleans); renderCleanerCleans();
-  showBanner('✓ Clean marked as complete', 'confirm');
+  showBanner('✓ Clean marked as complete', 'ok');
   // Push owner
   const ownerSub = await getFreshOwnerSub();
   if (ownerSub) {
@@ -5505,12 +5480,525 @@ function renderCleanerView() {
 }
 
 // ── ASSIGN CLEANER TO BOOKING (from detail modal) ─────────────────────────────
-function assignCleanerToBooking(bookingId) {
+async function assignCleanerToBooking(bookingId) {
+  const cleanerId = parseInt(document.getElementById('detail-assign-cleaner').value);
+  const date = document.getElementById('detail-assign-date').value;
+  if (!cleanerId || !date) { showBanner('⚠ Select a cleaner and date', 'warn'); return; }
+  const cleanerObj = loadCleaners().find(c => c.id === cleanerId);
+  if (!cleanerObj) { showBanner('⚠ Cleaner not found', 'warn'); return; }
   const booking = bookings.find(b => b.id === bookingId);
-  if (!booking) { showBanner('⚠ Booking not found', 'warn'); return; }
+  if (!booking) return;
+  const existingIdx = cleans.findIndex(c => c.bookingId === bookingId);
+  const newClean = {
+    id: existingIdx >= 0 ? cleans[existingIdx].id : Date.now(),
+    bookingId, guestName: booking.name,
+    cleaner: cleanerObj.name, cleanerId: cleanerObj.id,
+    date, done: false, notified: false, cleanerConfirmed: false
+  };
+  if (existingIdx >= 0) cleans[existingIdx] = newClean;
+  else cleans.push(newClean);
+  save();
+  showBanner('✓ Assigned to ' + cleanerObj.name, 'ok');
+  showDetail(bookingId);
 
-  closeDetailModal();
-  setTimeout(() => openAddCleanForBooking(bookingId), 40);
+  // Pull latest pushSubs from Sheet (cleaner sub lives on cleaner's device)
+  try {
+    const url = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+    console.log('Fetching pushSubs from:', url);
+    if (url && url.includes('script.google.com')) {
+      const resp = await fetch(url + '?action=getAppData');
+      const json = await resp.json();
+      if (json.success && json.data && json.data.pushSubs) {
+        const local = getPushSubs();
+        const merged = {
+          owner: local.owner || json.data.pushSubs.owner,
+          cleaners: Object.assign({}, json.data.pushSubs.cleaners, local.cleaners)
+        };
+        localStorage.setItem('gh-push-subs', JSON.stringify(merged));
+        console.log('Refreshed pushSubs. Cleaners:', Object.keys(merged.cleaners));
+      } else {
+        console.warn('getAppData response:', json);
+      }
+    }
+  } catch(e) { console.warn('Could not refresh pushSubs:', e); }
+
+  // Send push notification
+  const cleanerSub = getCleanerSub(cleanerObj.id);
+  console.log('Cleaner sub for id', cleanerObj.id, ':', cleanerSub ? 'found' : 'NOT FOUND');
+  if (cleanerSub) {
+    sendPushToDevice(cleanerSub,
+      '🏡 New Clean Assigned',
+      `${booking.name || 'Guest'} · ${fmt(date)}`,
+      cleanerLinkForId(cleanerObj),
+      'assign-' + bookingId
+    );
+  } else {
+    console.warn('No push subscription found for cleaner', cleanerObj.id, '— cleaner needs to enable notifications');
+  }
+
+  // Send email notification via Gmail/Apps Script (fires silently in background)
+  if (cleanerObj.email) {
+    sendCleanerEmail({
+      cleanerName: cleanerObj.name,
+      cleanerEmail: cleanerObj.email,
+      guestName: booking.name || 'Guest',
+      checkin: fmt(booking.checkin),
+      checkout: fmt(booking.checkout),
+      cleanerLink: cleanerLinkForId(cleanerObj)
+    }).then(result => {
+      if (result.ok) showBanner('✉️ Email sent to ' + cleanerObj.name, 'ok');
+      else if (result.reason !== 'no-key' && result.reason !== 'no-email') console.warn('Email failed:', result);
+    });
+  }
+}
+
+// ── EMAIL TEMPLATES ───────────────────────────────────────────────────────────
+const EMAIL_TEMPLATE_DEFAULTS = {
+  assignment: {
+    subject: 'New clean assigned — {{guest_name}} ({{checkin}})',
+    body: `Hi {{cleaner_name}},
+
+You've been assigned a new clean at Glenhaven.
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Tap the button below to open your app and accept or decline.`,
+    color: '#1E3A2F'
+  },
+  reminder: {
+    subject: '⏰ Reminder: Clean tomorrow — {{guest_name}}',
+    body: `Hi {{cleaner_name}},
+
+Just a reminder — you have a clean tomorrow at Glenhaven.
+
+Guest: {{guest_name}}
+Clean date: {{clean_date}}
+
+Tap the button below to open your app.`,
+    color: '#E65100'
+  }
+};
+
+const EMAIL_TEMPLATE_PRESETS = {
+  assignment: [
+    {
+      label: 'Friendly',
+      subject: 'New clean at Glenhaven — {{checkin}}',
+      body: `Hi {{cleaner_name}},
+
+You've been booked for a clean at Glenhaven! Here are the details:
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Please tap the button below to confirm you can make it.
+
+Thanks so much! 🙏`,
+      color: '#1E3A2F'
+    },
+    {
+      label: 'Professional',
+      subject: 'Clean assigned: {{guest_name}} checks out {{checkout}}',
+      body: `Hi {{cleaner_name}},
+
+A new clean has been assigned to you at Glenhaven.
+
+Guest: {{guest_name}}
+Check-in: {{checkin}}
+Check-out: {{checkout}}
+
+Open your app to accept or decline.`,
+      color: '#1E3A2F'
+    }
+  ],
+  reminder: [
+    {
+      label: 'Warm',
+      subject: '⏰ Tomorrow\'s clean — {{guest_name}}',
+      body: `Hi {{cleaner_name}},
+
+Just a heads up — you have a clean tomorrow at Glenhaven after {{guest_name}} checks out.
+
+Date: {{clean_date}}
+
+Everything you need is in your app. See you there! 🏡`,
+      color: '#E65100'
+    },
+    {
+      label: 'Minimal',
+      subject: 'Reminder: Glenhaven clean tomorrow',
+      body: `Hi {{cleaner_name}},
+
+Quick reminder that your clean at Glenhaven is tomorrow.
+
+Guest: {{guest_name}}
+Date: {{clean_date}}
+
+Tap below to open your app.`,
+      color: '#E65100'
+    }
+  ]
+};
+
+function applyPreset(type, idx) {
+  const preset = EMAIL_TEMPLATE_PRESETS[type][idx];
+  if (!preset) return;
+  document.getElementById('etpl-subject').value = preset.subject;
+  document.getElementById('etpl-body').value    = preset.body;
+  document.getElementById('etpl-color').value   = preset.color;
+  document.getElementById('etpl-color-preview').style.background = preset.color;
+  // Highlight selected preset
+  document.querySelectorAll('.etpl-preset-btn').forEach((b, i) => {
+    b.style.background    = i === idx ? 'var(--forest)' : 'var(--mist)';
+    b.style.color         = i === idx ? 'white' : 'var(--forest)';
+    b.style.borderColor   = i === idx ? 'var(--forest)' : 'var(--stone)';
+  });
+  updateEmailPreview(type);
+}
+
+const EMAIL_TEMPLATE_VARS = [
+  { tag: '{{cleaner_name}}', label: 'Cleaner name' },
+  { tag: '{{guest_name}}',   label: 'Guest name' },
+  { tag: '{{checkin}}',      label: 'Check-in date' },
+  { tag: '{{checkout}}',     label: 'Check-out date' },
+  { tag: '{{clean_date}}',   label: 'Clean date' },
+  { tag: '{{cleaner_link}}', label: 'App link' },
+];
+
+function loadEmailTemplate(type) {
+  const saved = loadJSON('gh-email-tpl-' + type);
+  return saved || EMAIL_TEMPLATE_DEFAULTS[type];
+}
+
+function saveEmailTemplate(type) {
+  const subject = document.getElementById('etpl-subject').value;
+  const body    = document.getElementById('etpl-body').value;
+  const color   = document.getElementById('etpl-color').value;
+  const tpl = { subject, body, color };
+  localStorage.setItem('gh-email-tpl-' + type, JSON.stringify(tpl));
+  // Sync reminder template to AppData so Apps Script can use it
+  if (type === 'reminder') scheduleAppDataSave('emailTplReminder', tpl);
+  if (type === 'assignment') scheduleAppDataSave('emailTplAssignment', tpl);
+  const conf = document.getElementById('etpl-save-confirm');
+  if (conf) { conf.style.display = 'block'; setTimeout(() => conf.style.display = 'none', 2000); }
+}
+
+function resetEmailTemplate(type) {
+  const def = EMAIL_TEMPLATE_DEFAULTS[type];
+  document.getElementById('etpl-subject').value = def.subject;
+  document.getElementById('etpl-body').value    = def.body;
+  document.getElementById('etpl-color').value   = def.color;
+  document.getElementById('etpl-color-preview').style.background = def.color;
+}
+
+function insertTemplateVar(tag) {
+  const ta = document.getElementById('etpl-body');
+  if (!ta) return;
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  ta.value = ta.value.slice(0, start) + tag + ta.value.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + tag.length;
+  ta.focus();
+}
+
+function openEmailTemplatePanel(type) {
+  const tpl = loadEmailTemplate(type);
+  const isAssignment = type === 'assignment';
+  const title = isAssignment ? '📋 Assignment Email' : '⏰ Reminder Email';
+  const desc  = isAssignment ? 'Sent when you assign a clean.' : 'Sent 24 hours before the clean.';
+
+  document.getElementById('email-template-content').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:0">
+
+      <!-- EDITOR PANE -->
+      <div style="padding:0">
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <div class="card-title" style="margin-bottom:0">${title}</div>
+            <div style="display:flex;gap:6px">
+              <button onclick="resetEmailTemplate('${type}')" style="font-size:11px;background:none;border:1px solid var(--stone);border-radius:20px;padding:4px 10px;cursor:pointer;color:var(--text-soft);font-family:'DM Sans',sans-serif">Reset</button>
+              <button onclick="saveEmailTemplate('${type}')" class="btn-primary" style="font-size:12px;padding:6px 14px">Save</button>
+            </div>
+          </div>
+          <div id="etpl-save-confirm" style="font-size:12px;color:var(--moss);margin-bottom:6px;display:none">✓ Saved</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-bottom:12px">${desc}</div>
+
+          <label>Presets</label>
+          <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+            ${(EMAIL_TEMPLATE_PRESETS[type]||[]).map((p,i) => `<button class="etpl-preset-btn" onclick="applyPreset('${type}',${i})"
+              style="font-size:12px;background:var(--mist);border:1px solid var(--stone);border-radius:20px;padding:6px 14px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--forest);font-weight:500">${p.label}</button>`).join('')}
+          </div>
+
+          <label>Subject</label>
+          <input type="text" id="etpl-subject" value="${(tpl.subject||'').replace(/"/g,'&quot;')}"
+            style="font-size:14px;margin-bottom:10px"
+            oninput="updateEmailPreview('${type}')">
+
+          <label>Accent Colour</label>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <input type="color" id="etpl-color" value="${tpl.color||'#1E3A2F'}"
+              style="width:44px;height:44px;border:none;border-radius:8px;cursor:pointer;padding:2px;flex-shrink:0"
+              oninput="document.getElementById('etpl-color-preview').style.background=this.value;updateEmailPreview('${type}')">
+            <div id="etpl-color-preview" style="flex:1;height:44px;border-radius:8px;background:${tpl.color||'#1E3A2F'}"></div>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+            <label style="margin:0">Body</label>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:65%">
+              ${EMAIL_TEMPLATE_VARS.map(v => `<button onclick="insertTemplateVar('${v.tag}')"
+                style="font-size:10px;background:var(--mist);border:1px solid var(--stone);border-radius:20px;padding:3px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--forest);white-space:nowrap">${v.label}</button>`).join('')}
+            </div>
+          </div>
+          <textarea id="etpl-body" rows="7"
+            style="font-size:13px;line-height:1.6;font-family:'DM Sans',sans-serif;resize:vertical;margin-bottom:0"
+            oninput="updateEmailPreview('${type}')">${tpl.body||''}</textarea>
+        </div>
+      </div>
+
+      <!-- PREVIEW PANE -->
+      <div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-soft);padding:4px 4px 8px">Preview</div>
+        <div style="border-radius:12px;overflow:hidden;border:1px solid var(--warm);background:white">
+          <div style="background:#e8e8e8;padding:8px 12px;display:flex;align-items:center;gap:6px">
+            <div style="width:10px;height:10px;border-radius:50%;background:#FF5F57"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#FEBC2E"></div>
+            <div style="width:10px;height:10px;border-radius:50%;background:#28C840"></div>
+            <div style="flex:1;background:white;border-radius:4px;padding:3px 8px;font-size:11px;color:#666;margin-left:4px" id="etpl-preview-subject">Subject preview</div>
+          </div>
+          <div id="etpl-preview-body" style="padding:16px;font-size:13px"></div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('settings-panel-email-template').dataset.tplType = type;
+  openSettingsPanel('email-template');
+  setTimeout(() => updateEmailPreview(type), 50);
+}
+
+function updateEmailPreview(type) {
+  const subject  = document.getElementById('etpl-subject')?.value || '';
+  const body     = document.getElementById('etpl-body')?.value    || '';
+  const color    = document.getElementById('etpl-color')?.value   || '#1E3A2F';
+
+  // Fill with sample values
+  function fillSample(str) {
+    return str
+      .replace(/{{cleaner_name}}/g, 'Megan')
+      .replace(/{{guest_name}}/g,   'Sarah Johnson')
+      .replace(/{{checkin}}/g,       '14 Jun 2025')
+      .replace(/{{checkout}}/g,      '18 Jun 2025')
+      .replace(/{{clean_date}}/g,    '18 Jun 2025')
+      .replace(/{{cleaner_link}}/g,  '#');
+  }
+
+  const subjectEl = document.getElementById('etpl-preview-subject');
+  if (subjectEl) subjectEl.textContent = fillSample(subject) || 'Subject preview';
+
+  const bodyText = fillSample(body);
+  const bodyHtml = bodyText.split('\n').map(line =>
+    line.trim() === '' ? '<br>' : `<p style="margin:0 0 8px;font-size:13px;line-height:1.5">${line}</p>`
+  ).join('');
+
+  const previewEl = document.getElementById('etpl-preview-body');
+  if (previewEl) previewEl.innerHTML = `
+    <div style="font-family:sans-serif;color:#1a1a1a">
+      <div style="background:${color};padding:16px 20px;border-radius:8px 8px 0 0;margin:-16px -16px 16px">
+        <div style="color:white;font-size:16px;font-weight:700">🏡 Glenhaven</div>
+      </div>
+      ${bodyHtml}
+      <div style="margin-top:16px">
+        <div style="background:${color};color:white;text-align:center;padding:12px;border-radius:8px;font-weight:600;font-size:13px">Open My Cleaner App →</div>
+      </div>
+    </div>`;
+}
+function applyEmailTemplate(type, vars) {
+  const tpl = loadEmailTemplate(type);
+  function fill(str) {
+    return str
+      .replace(/{{cleaner_name}}/g, vars.cleanerName || '')
+      .replace(/{{guest_name}}/g,   vars.guestName   || '')
+      .replace(/{{checkin}}/g,      vars.checkin      || '')
+      .replace(/{{checkout}}/g,     vars.checkout     || '')
+      .replace(/{{clean_date}}/g,   vars.cleanDate    || vars.checkin || '')
+      .replace(/{{cleaner_link}}/g, vars.cleanerLink  || '');
+  }
+  const subject = fill(tpl.subject || EMAIL_TEMPLATE_DEFAULTS[type].subject);
+  const bodyText = fill(tpl.body   || EMAIL_TEMPLATE_DEFAULTS[type].body);
+  const color    = tpl.color || EMAIL_TEMPLATE_DEFAULTS[type].color;
+  // Convert plain text body to HTML (preserve line breaks, make link a button)
+  const bodyHtml = bodyText
+    .split('\n')
+    .map(line => line.trim() === '' ? '<br>' : `<p style="margin:0 0 8px">${line}</p>`)
+    .join('');
+  const html = `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#1a1a1a">
+    <div style="background:${color};padding:20px 24px;border-radius:10px 10px 0 0">
+      <h1 style="color:white;margin:0;font-size:20px">🏡 Glenhaven</h1>
+    </div>
+    <div style="background:#f9f7f4;padding:24px;border-radius:0 0 10px 10px;border:1px solid #e8e0d8;border-top:none">
+      ${bodyHtml}
+      <div style="margin-top:20px">
+        <a href="${vars.cleanerLink||'#'}" style="display:block;background:${color};color:white;text-align:center;padding:14px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Open My Cleaner App →</a>
+      </div>
+    </div>
+  </div>`;
+  return { subject, html, text: bodyText };
+}
+async function sendCleanerEmail({ cleanerName, cleanerEmail, guestName, checkin, checkout, cleanerLink, cleanDate, type }) {
+  const scriptUrl = localStorage.getItem('gh-script-url') || DEFAULT_SCRIPT_URL;
+  if (!cleanerEmail) return { ok: false, reason: 'no-email' };
+  const emailType = type || 'assignment';
+  const { subject, html, text } = applyEmailTemplate(emailType, {
+    cleanerName: cleanerName.split(' ')[0],
+    guestName, checkin, checkout,
+    cleanDate: cleanDate || checkin,
+    cleanerLink
+  });
+  try {
+    const resp = await fetch(scriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'sendEmail', to: cleanerEmail, subject, html, text })
+    });
+    const data = await resp.json();
+    return { ok: data.success, data };
+  } catch(e) {
+    return { ok: false, reason: e.message };
+  }
+}
+
+async function debugCSVColumns() {
+  const el = document.getElementById('csv-debug-result');
+  el.style.display = 'block';
+  if (window._csvDebug) {
+    el.textContent = window._csvDebug;
+    return;
+  }
+  el.textContent = 'Fetching…';
+  try {
+    const res = await fetch(SHEET_URL + '&t=' + Date.now());
+    const csv = await res.text();
+    const lines = csv.trim().split('\n').filter(l => l.trim());
+    const headers = parseCSVLine(lines[0]);
+    const firstRow = lines.length > 1 ? parseCSVLine(lines[1]) : [];
+    let out = 'HEADERS:\n';
+    headers.forEach((h, i) => { out += `[${i}] col ${String.fromCharCode(65+i)}: "${h}"\n`; });
+    out += '\nFIRST DATA ROW:\n';
+    firstRow.forEach((v, i) => { out += `[${i}]: ${JSON.stringify(v)}\n`; });
+    el.textContent = out;
+    window._csvDebug = out;
+  } catch(e) {
+    el.textContent = 'Error: ' + e.message;
+  }
+}
+
+async function testCleanerEmail() {
+  const resultEl = document.getElementById('email-test-result');
+  if (resultEl) { resultEl.style.display = 'block'; resultEl.style.background = 'var(--warm)'; resultEl.style.color = 'var(--text-soft)'; resultEl.textContent = 'Sending…'; }
+  const cleaners = loadCleaners().filter(c => c.email);
+  if (!cleaners.length) {
+    if (resultEl) { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '⚠ Add an email to at least one team member first (Settings → Property → Team)'; }
+    return;
+  }
+  const c = cleaners[0];
+  const ownerEmail = localStorage.getItem('gh-owner-email') || localStorage.getItem('gh-invoice-email');
+  const testTo = ownerEmail || c.email;
+  const result = await sendCleanerEmail({
+    cleanerName: c.name, cleanerEmail: testTo,
+    guestName: 'Test Guest', checkin: 'Tomorrow', checkout: 'Day after',
+    cleanerLink: cleanerLinkForId(c)
+  });
+  if (resultEl) {
+    if (result.ok) { resultEl.style.background = '#F0FAF4'; resultEl.style.color = 'var(--moss)'; resultEl.textContent = '✓ Test email sent to ' + testTo; }
+    else { resultEl.style.background = '#FEF2F2'; resultEl.style.color = 'var(--red)'; resultEl.textContent = '✕ Failed — check your Apps Script URL is saved and deployed'; }
+  }
+}
+
+// ── CLEANER ACCESS SETTINGS ───────────────────────────────────────────────────
+function openCleanerSettings() {
+  renderCleanerAccessList();
+}
+function renderCleanerAccessList() {
+  const el = document.getElementById('cleaner-access-list');
+  if (!el) return;
+  const cleaners = loadCleaners().filter(c => !c.role || c.role === 'Cleaner');
+  if (!cleaners.length) {
+    el.innerHTML = `<div class="card" style="margin-bottom:12px;text-align:center;padding:24px">
+      <div style="font-size:32px;margin-bottom:8px">🧹</div>
+      <div style="font-weight:600;font-size:14px;margin-bottom:6px">No cleaners added yet</div>
+      <div style="font-size:12px;color:var(--text-soft);margin-bottom:14px">Go to Settings → Property → Team to add cleaners</div>
+      <button onclick="openSettingsCat('property');openSettingsPanel('team')" class="btn-primary">Add Team Members</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML = `<div class="card" style="padding:0 16px;overflow:hidden;margin-bottom:12px">` +
+    cleaners.map((c, i) => `
+    <div class="settings-cat-item" onclick="openCleanerProfile(${c.id})" ${i===cleaners.length-1?'style="border-bottom:none"':''}>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--forest);color:white;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0">${c.name.charAt(0)}</div>
+        <div>
+          <div style="font-weight:500;font-size:14px">${c.name}</div>
+          <div style="font-size:12px;color:var(--text-soft)">${c.pin ? '🔐 PIN set' : '⚠️ No PIN'} · ${c.email ? '✉️ Email set' : 'No email'}</div>
+        </div>
+      </div>
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>`).join('') + `</div>
+  <div class="card" style="padding:0 16px;overflow:hidden">
+    <div class="settings-cat-item" onclick="openSettingsCat('property');setTimeout(()=>openSettingsPanel('team'),50)" style="border-bottom:none">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:9px;background:#1E3A2F;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">＋</div>
+        <div style="font-weight:500;font-size:14px;color:var(--forest)">Add Person</div>
+      </div>
+      <div style="color:#C7C7CC;font-size:20px;font-weight:300">›</div>
+    </div>
+  </div>`;
+}
+function cleanerLinkForId(c) {
+  const base = window.location.origin + window.location.pathname;
+  return c.pin ? base + '#cleaner/' + c.id + '/' + btoa(c.pin) : base + '#cleaner/' + c.id;
+}
+function saveCleanerPinById(id) {
+  const input = document.getElementById('pin-input-' + id);
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val || !/^\d{4}$/.test(val)) { showBanner('⚠ Please enter exactly 4 digits', 'warn'); return; }
+  const list = loadCleaners();
+  const c = list.find(x => x.id === id);
+  if (!c) return;
+  c.pin = val; input.value = '';
+  saveCleaners(list);
+  renderCleanerAccessList();
+  showBanner('✓ PIN saved for ' + c.name, 'ok');
+}
+async function clearCleanerPinById(id) {
+  const list = loadCleaners();
+  const c = list.find(x => x.id === id);
+  if (!c) return;
+  const ok = await showAppModal({ title: 'Clear PIN', msg: `Remove PIN for ${c.name}?`, confirmText: 'Clear', confirmColor: 'var(--red)' });
+  if (!ok) return;
+  delete c.pin;
+  localStorage.removeItem('gh-cleaner-authed-' + id);
+  saveCleaners(list);
+  renderCleanerAccessList();
+  showBanner('✓ PIN cleared for ' + c.name, 'ok');
+}
+function saveCleanerPerm(id, key, val) {
+  const list = loadCleaners();
+  const c = list.find(x => x.id === id);
+  if (!c) return;
+  if (!c.permissions) c.permissions = {};
+  c.permissions[key] = val;
+  saveCleaners(list);
+}
+function copyCleanerLinkById(id) {
+  const list = loadCleaners();
+  const c = list.find(x => x.id === id);
+  if (!c) return;
+  if (!c.pin) { showBanner('⚠ Set a PIN for ' + c.name + ' first', 'warn'); return; }
+  const url = cleanerLinkForId(c);
+  navigator.clipboard.writeText(url).then(() => showBanner('✓ Link copied for ' + c.name, 'ok'))
+    .catch(() => showBanner('⚠ Copy failed — select the link manually', 'warn'));
 }
 
 // Init on load
